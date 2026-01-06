@@ -10,7 +10,7 @@ import time
 import wandb
 from hydra.core.hydra_config import HydraConfig
 import logging
-from omegaconf import DictConfig, OmegaConf, open_dict
+from omegaconf import DictConfig, OmegaConf, open_dict, ListConfig
 import os
 from rich.traceback import install
 install()
@@ -28,7 +28,7 @@ from utils import (
 )
 
 from datasets import get_dataloader
-from models.base import LateFusionClassifier, LateFusionMultiLabelClassifier, FusionModel
+from models.base import LateFusionClassifier, LateFusionMultiLabelClassifier, EarlyFusionDiscriminative
 from models import *
 
 # A logger for this file
@@ -44,6 +44,8 @@ def main(cfg: DictConfig):
         cfg: Config file.
     """
 
+    import torch
+    
     start_event = torch.cuda.Event(enable_timing=True)
     end_event = torch.cuda.Event(enable_timing=True)
 
@@ -74,6 +76,8 @@ def main(cfg: DictConfig):
     # Ensure that everything is properly seeded
     seed_everything(cfg.seed, workers=True)
 
+    import torch
+    
     # Setup devices
     if torch.cuda.is_available():
         accelerator = "gpu"
@@ -150,10 +154,13 @@ def main(cfg: DictConfig):
     if not cfg.load_and_eval:
         # Fit model
         trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
-        model = model_class.load_from_checkpoint(trainer.checkpoint_callback.best_model_path) 
+        model = model_class.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
+        
+       
 
     logger.info("Evaluating model...")
-    trainer.test(model=model, dataloaders=[train_loader, val_loader, test_loader], verbose=True)
+    trainer.test(model=model, dataloaders=[test_loader], verbose=True)
+    # trainer.test(model=model, dataloaders=[train_loader, val_loader, test_loader], verbose=True)
     logger.info("Finished evaluation...")
 
     # Save checkpoint in general models directory to be used across experiments

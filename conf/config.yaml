@@ -17,8 +17,8 @@ hydra:
       file:
         filename: ${hydra.runtime.output_dir}/${hydra.job.name}.log  # Fixed in hydra-colorlog version 1.2.1
 
-data_dir: "/mnt/datasets/"
-results_dir: "./results/${group_tag}"
+data_dir: "/home/pxt220000/Projects/datasets"
+results_dir: "./results/${exp_setup}/${group_tag}"
 project_name: "multimodal-fusion"
 lr: 0.001
 batch_size: 128
@@ -34,14 +34,19 @@ epochs: 50
 load_and_eval: False
 precision: 64
 group_tag: ???
-tag: ${experiment.name}/T${trial}
+tag: ${experiment.name}/T${trial}/noise_${noise_severity}
 wandb: False
 trial: 1
 swa: False
 profiler: ???
 torch_compile: False
 dataset: ???
-model: "weighted_mean"
 joint_training: True
 lamda: 1
 patience: 30
+noise_severity: Null
+temperature: [1,1]
+weight_decay: 1e-4
+freeze_unimodals: False
+random_noise_context: False
+exp_setup: "both_modalities_one_twice_as_severe"

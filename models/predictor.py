@@ -1,33 +1,38 @@
 import torch
 
-def make_classifier(in_dim, out_dim, n_layers, n_hidden, activation=torch.nn.Tanh(), final_activation='torch.nn.Softmax(dim=-1)'):
+def make_classifier(in_dim, out_dim, n_layers, n_hidden, activation='torch.nn.Tanh()', final_activation='torch.nn.Softmax(dim=-1)', dropout=0.0):
     layers = [
             torch.nn.Flatten(),
             torch.nn.Linear(in_features=in_dim, out_features=n_hidden),
-            activation,
+            eval(activation),
         ]
     for _ in range(n_layers):
-        layers += [
-        torch.nn.Linear(in_features=n_hidden, out_features=n_hidden),
-        activation,
-    ]
+        if dropout > 0.0:
+            layers += [
+            torch.nn.Linear(in_features=n_hidden, out_features=n_hidden),
+            eval(activation),
+            torch.nn.Dropout(dropout),]
+        else:
+            layers += [
+            torch.nn.Linear(in_features=n_hidden, out_features=n_hidden),
+            eval(activation)]
     layers += [torch.nn.Linear(in_features=n_hidden, out_features=out_dim)]
     
-    if(final_activation is not None):
+    if(eval(final_activation) is not None):
         layers += [eval(final_activation)]
     return torch.nn.Sequential(*layers)
     
 class Classifier(torch.nn.Module):
-    def __init__(self, in_dim, out_dim, n_layers, n_hidden, activation=torch.nn.Tanh(), final_activation='torch.nn.Softmax(dim=-1)'):
+    def __init__(self, in_dim, out_dim, n_layers, n_hidden, activation='torch.nn.Tanh()', final_activation='torch.nn.Softmax(dim=-1)', dropout=0.0):
         super(Classifier, self).__init__()
-        self.head = make_classifier(in_dim, out_dim, n_layers, n_hidden, activation, final_activation)
+        self.head = make_classifier(in_dim, out_dim, n_layers, n_hidden, activation, final_activation, dropout)
         
     def forward(self, x, context=None,  **kwargs):
         x = torch.cat(x, dim=-1) if type(x) == list else x
         return self.head(x)
         
 class MultiHeadClassifier(torch.nn.Module):
-    def __init__(self, n_heads, in_dim, out_dim, n_layers, n_hidden, activation=torch.nn.Tanh(), final_activation='torch.nn.Softmax(dim=-1)'):
+    def __init__(self, n_heads, in_dim, out_dim, n_layers, n_hidden, activation='torch.nn.Tanh()', final_activation='torch.nn.Softmax(dim=-1)'):
         assert len(in_dim) == n_heads
         super(MultiHeadClassifier, self).__init__()
         
