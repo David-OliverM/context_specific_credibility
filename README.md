@@ -1,5 +1,5 @@
 # Context Specific Credibility aware Multimodal Fusion
-This repository contains the code for the project - **Credibility-Aware Multi-Modal FusiContext-specific Credibility-aware Multimodal Fusion with Conditional Probabilistic Circuits**(https://arxiv.org/abs/2603.26629). This is under active development.
+This repository contains the code for the project - **[Credibility-Aware Multi-Modal FusiContext-specific Credibility-aware Multimodal Fusion with Conditional Probabilistic Circuits](https://arxiv.org/abs/2603.26629)**. This is under active development.
 
 
 ## Setup
