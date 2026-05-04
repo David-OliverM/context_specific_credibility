@@ -1,49 +1,91 @@
 import torch
 
-def make_classifier(in_dim, out_dim, n_layers, n_hidden, activation='torch.nn.Tanh()', final_activation='torch.nn.Softmax(dim=-1)', dropout=0.0):
+
+def make_encoder(
+    in_dim,
+    embed_dim,
+    n_layers,
+    n_hidden,
+    activation='torch.nn.Tanh()',
+    dropout=0.0
+):
     layers = [
-            torch.nn.Flatten(),
-            torch.nn.Linear(in_features=in_dim, out_features=n_hidden),
-            eval(activation),
-        ]
+        torch.nn.Flatten(),
+        torch.nn.Linear(in_features=in_dim, out_features=n_hidden),
+        eval(activation),
+    ]
+
     for _ in range(n_layers):
         if dropout > 0.0:
             layers += [
-            torch.nn.Linear(in_features=n_hidden, out_features=n_hidden),
-            eval(activation),
-            torch.nn.Dropout(dropout),]
+                torch.nn.Linear(n_hidden, n_hidden),
+                eval(activation),
+                torch.nn.Dropout(dropout),
+            ]
         else:
             layers += [
-            torch.nn.Linear(in_features=n_hidden, out_features=n_hidden),
-            eval(activation)]
-    layers += [torch.nn.Linear(in_features=n_hidden, out_features=out_dim)]
-    
-    if(eval(final_activation) is not None):
-        layers += [eval(final_activation)]
+                torch.nn.Linear(n_hidden, n_hidden),
+                eval(activation),
+            ]
+
+    layers += [
+        torch.nn.Linear(n_hidden, embed_dim),
+        eval(activation),
+    ]
+
     return torch.nn.Sequential(*layers)
-    
+
+
+def make_head(
+    embed_dim,
+    out_dim,
+    final_activation='torch.nn.Softmax(dim=-1)'
+):
+    layers = [torch.nn.Linear(embed_dim, out_dim)]
+
+    if eval(final_activation) is not None:
+        layers += [eval(final_activation)]
+
+    return torch.nn.Sequential(*layers)
+
+
 class Classifier(torch.nn.Module):
-    def __init__(self, in_dim, out_dim, n_layers, n_hidden, activation='torch.nn.Tanh()', final_activation='torch.nn.Softmax(dim=-1)', dropout=0.0):
-        super(Classifier, self).__init__()
-        self.head = make_classifier(in_dim, out_dim, n_layers, n_hidden, activation, final_activation, dropout)
-        
-    def forward(self, x, context=None,  **kwargs):
-        x = torch.cat(x, dim=-1) if type(x) == list else x
-        return self.head(x)
-        
-class MultiHeadClassifier(torch.nn.Module):
-    def __init__(self, n_heads, in_dim, out_dim, n_layers, n_hidden, activation='torch.nn.Tanh()', final_activation='torch.nn.Softmax(dim=-1)'):
-        assert len(in_dim) == n_heads
-        super(MultiHeadClassifier, self).__init__()
-        
-        self.heads = torch.nn.ModuleList([
-            make_classifier(in_dim[i], out_dim[i], n_layers[i], n_hidden[i], activation, final_activation) for i in range(n_heads)
-        ])
-    
-    def forward(self, x, context=None,  **kwargs):
-        out = []
-        for x_i, head in zip(x, self.heads):
-            out += [head(x_i).unsqueeze(1)]
-        return torch.cat(out,dim=1)
-        
+    def __init__(
+        self,
+        in_dim,
+        out_dim,
+        n_layers,
+        n_hidden,
+        embed_dim=64,
+        activation='torch.nn.Tanh()',
+        final_activation='torch.nn.Softmax(dim=-1)',
+        dropout=0.0
+    ):
+        super().__init__()
+
+        self.encoder = make_encoder(
+            in_dim=in_dim,
+            embed_dim=embed_dim,
+            n_layers=n_layers,
+            n_hidden=n_hidden,
+            activation=activation,
+            dropout=dropout
+        )
+
+        self.head = make_head(
+            embed_dim=embed_dim,
+            out_dim=out_dim,
+            final_activation=final_activation
+        )
+
+    def forward(self, x, context=None, return_embedding=False, **kwargs):
+        x = torch.cat(x, dim=-1) if isinstance(x, list) else x
+
+        z = self.encoder(x)          # [B, embed_dim]
+        logits = self.head(z)        # [B, out_dim]
+
+        if return_embedding:
+            return logits, z
+        return logits
+
 
