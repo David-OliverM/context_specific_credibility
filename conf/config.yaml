@@ -17,7 +17,7 @@ hydra:
       file:
         filename: ${hydra.runtime.output_dir}/${hydra.job.name}.log  # Fixed in hydra-colorlog version 1.2.1
 
-data_dir: "/nas1-nfs1/home/pxt220000/projects/datasets"
+data_dir: "/path/to/datasets"
 results_dir: "./results/${exp_setup}/${group_tag}"
 project_name: "multimodal-fusion"
 lr: 0.001
