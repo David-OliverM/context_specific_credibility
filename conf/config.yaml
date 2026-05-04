@@ -17,7 +17,7 @@ hydra:
       file:
         filename: ${hydra.runtime.output_dir}/${hydra.job.name}.log  # Fixed in hydra-colorlog version 1.2.1
 
-data_dir: "/home/pxt220000/Projects/datasets"
+data_dir: "/nas1-nfs1/home/pxt220000/projects/datasets"
 results_dir: "./results/${exp_setup}/${group_tag}"
 project_name: "multimodal-fusion"
 lr: 0.001
@@ -45,8 +45,11 @@ joint_training: True
 lamda: 1
 patience: 30
 noise_severity: Null
+test_noise: 0.0
 temperature: [1,1]
 weight_decay: 1e-4
 freeze_unimodals: False
 random_noise_context: False
 exp_setup: "both_modalities_one_twice_as_severe"
+con_loss: False
+fully_decoupled_training: False

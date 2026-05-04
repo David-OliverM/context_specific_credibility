@@ -51,13 +51,13 @@ head:
     num_features: 2
     num_channels: 1
     depth: 1
-    num_sums: 10
-    num_leaves: 10
-    num_repetitions: 10
+    num_sums: 45
+    num_leaves: 45
+    num_repetitions: 50
     num_classes: ${experiment.dataset.num_classes}
     leaf_type: 'Dirichlet' 
     leaf_kwargs:
       num_classes: ${experiment.dataset.num_classes}
     einet_mixture: False
     layer_type: 'einsum'
-    dropout: 0.4
+    dropout: 0.2

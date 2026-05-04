@@ -14,11 +14,13 @@ This repository has dependencies with following three packages. They are organiz
 Specify the hyperparameter configurations for your experiment in the appropriate config file inside `conf/`. 
 Use the following commands to run experiments. You can pass values as needed from the command line for the hyperparameters specified in the config file.
 
+** Joint Training trains the pipeline end-to-end. To only train the fusion function decoupled from the pretrained unimodal predictors, set fully_decoupled_training=True **
+** noise_severity sets the noise on train data - set it to Null if you don't want to explicitly add noise **
 ```bash
-python main.py dataset=avmnist experiment=avmnist_weighted_mean batch_size=128 group_tag=avmnist
+python main.py dataset=clean_avmnist experiment=clean_avmnist_cs_credibility_weighted group_tag=base seed=42 exp_setup=joint_trng noise_severity=1 test_noise=0.5
 ```
 ```bash
-python credibility.py dataset=avmnist experiment=avmnist_weighted_mean group_tag=avmnist lamda=0.1 noisy_modality=0
+python credibility.py dataset=clean_avmnist experiment=clean_avmnist_cs_credibility_weighted group_tag=base seed=42 exp_setup=joint_trng noise_severity=1 test_noise=0.5
 ```
 
 ## Currently Supported Late Fusion Methods
@@ -27,6 +29,8 @@ python credibility.py dataset=avmnist experiment=avmnist_weighted_mean group_tag
 - [x] MLP
 - [x] TMC
 - [x] EinsumNet with Dirichlet leaves (Direct-PC)
+- [x] Conditional-SPN
 - [x] Credibility Weighted Mean
+- [x] Context-Specific Credibility Weighted Mean
 
     

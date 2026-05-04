@@ -1,0 +1,73 @@
+name: "nyud2/cs_credibility_weighted"
+classification: True
+multilabel: False
+dataset:
+  name: "nyud2"
+  path: "${data_dir}/nyud2/nyud2_trainvaltest"
+  args: 
+    FINE_SIZE: 224
+    LOAD_SIZE: 256
+  modalities: 2
+  batch_size: ${batch_size}
+  num_classes: 10
+  class_names: [0,1,2,3,4,5,6,7,8,9]
+encoders:
+  image: 
+      type: "ImageEncoder"
+      args:
+        img_embed_pool_type: "avg"
+        num_image_embeds: 3
+        
+  depth: 
+      type: "ImageEncoder"
+      args:
+        img_embed_pool_type: "avg"
+        num_image_embeds: 3
+        
+
+
+predictors:
+  image: 
+      type: "Classifier"
+      args:
+        in_dim: 1536
+        out_dim: ${experiment.dataset.num_classes}
+        n_layers: 0
+        n_hidden: 512
+        
+  depth:
+      type: "Classifier"
+      args:
+        in_dim: 1536
+        out_dim: ${experiment.dataset.num_classes}
+        n_layers: 0
+        n_hidden: 512
+
+
+
+head:
+  type: "CredibilityWeightedMean"
+  threshold_input: False
+  args: 
+    num_features: 2
+    num_channels: 1
+    depth: 1
+    num_sums: 10 #25 
+    num_leaves: 10 #25 
+    num_repetitions: 10 #30 
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: 'Dirichlet' 
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: False
+    layer_type: 'einsum'
+    dropout: 0.2
+    conditional_sum: True
+    sum_cond_fn_type: 'Classifier'
+    sum_cond_fn_args:
+      in_dim: 3072 #3072
+      n_layers: 3
+      n_hidden: 64
+      final_activation: None
+      out_dim: None
+      

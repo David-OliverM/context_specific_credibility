@@ -16,9 +16,12 @@ from sklearn.metrics import accuracy_score, roc_auc_score, precision_score, reca
 import matplotlib.pyplot as plt
 import os
 from sklearn.calibration import calibration_curve
+from packages.probmetrics.probmetrics.distributions import CategoricalProbs
+from packages.probmetrics.probmetrics.calibrators import get_calibrator
 from omegaconf import open_dict
-from models.losses import FLandMDCA
-from models.utils import save_metric_json, make_model_diagrams
+from models.reliability_diagrams import *
+from models.losses import FLandMDCA, SupConLoss
+from models.save_results import save_metric_json
 # Translate the dataloader index to the dataset name
 DATALOADER_ID_TO_SET_NAME = {0: "train", 1: "val", 2: "test"}
 
@@ -89,9 +92,29 @@ class FusionModel(LitModel):
                 self.encoders += [eval(cfg.experiment.encoders[modality].type)(**cfg.experiment.encoders[modality].args, freeze_params = cfg.freeze_unimodals)]
         for modality in cfg.experiment.predictors:
             self.predictors += [eval(cfg.experiment.predictors[modality].type)(**cfg.experiment.predictors[modality].args)] if cfg.experiment.predictors[modality].type is not None else [None]
-        self.head = eval(cfg.experiment.head.type)(**cfg.experiment.head.args)
+
         self.encoders, self.predictors = torch.nn.ModuleList(self.encoders), torch.nn.ModuleList(self.predictors)
         self.num_modalities = cfg.experiment.dataset.modalities
+        if self.cfg.fully_decoupled_training:
+            encoders, predictors = [], []
+            for i in range(self.num_modalities):
+                unimodal_model = torch.nn.Sequential(self.encoders[i], self.predictors[i])
+                unimodal_model.load_state_dict(torch.load(f'trained_models/{self.cfg.experiment.dataset.name}/noise_{self.cfg.noise_severity}/seed_{self.cfg.seed}/unimodal_{i}.pth'))
+                encoder = unimodal_model[0]
+                predictor = unimodal_model[1]
+                encoder.eval()
+                predictor.eval()
+                for p in encoder.parameters():
+                    p.requires_grad = False
+                for p in predictor.parameters():
+                    p.requires_grad = False
+                
+                encoders.append(encoder)
+                predictors.append(predictor)
+            self.encoders, self.predictors = torch.nn.ModuleList(encoders), torch.nn.ModuleList(predictors)
+
+        self.head = eval(cfg.experiment.head.type)(**cfg.experiment.head.args)
+        
         # Define loss function
         self.criterion = nn.NLLLoss()
         self.test_pred, self.test_target, self.unimodal_test_pred = [], [], []
@@ -107,7 +130,7 @@ class FusionModel(LitModel):
                 self.noise_encoders.append(enc_copy)
 
     def training_step(self, train_batch, batch_idx):
-        train_batch, _, noise_ind = train_batch
+        train_batch, corr, noise_ind = train_batch
         loss, accuracy, predictions, *extra = self._get_cross_entropy_and_accuracy(train_batch, noise_ind=noise_ind)
         self.log("Train/accuracy", accuracy, on_step=True, prog_bar=True)
         self.log("Train/loss", loss, on_step=True)
@@ -158,9 +181,10 @@ class FusionModel(LitModel):
 
         
         #create a folder to save the plots
+        test_noise = 100
         calib_folder = 'calibration_plots'
-        os.makedirs(f'{calib_folder}/{self.cfg.exp_setup}/{self.cfg.group_tag}/{self.cfg.experiment.name}/T{self.cfg.trial}/noise_severity_{self.cfg.noise_severity}', exist_ok=True)
-        os.chdir(f'{calib_folder}/{self.cfg.exp_setup}/{self.cfg.group_tag}/{self.cfg.experiment.name}/T{self.cfg.trial}/noise_severity_{self.cfg.noise_severity}')
+        os.makedirs(f'{calib_folder}/{self.cfg.exp_setup}/{self.cfg.group_tag}/{self.cfg.experiment.name}/T{self.cfg.trial}/noise_severity_{self.cfg.noise_severity}/test_noise_{test_noise}', exist_ok=True)
+        os.chdir(f'{calib_folder}/{self.cfg.exp_setup}/{self.cfg.group_tag}/{self.cfg.experiment.name}/T{self.cfg.trial}/noise_severity_{self.cfg.noise_severity}/test_noise_{test_noise}')
 
         print("\nGenerating Calibration Plot...")
 
@@ -180,23 +204,6 @@ class FusionModel(LitModel):
 
         print("Confidence calibration plot saved as confidence_calibration_plot.png")
         print(f"Calibration plots saved as PNG files to calibration_plots/{self.cfg.experiment.name}/noise_severity_{self.cfg.noise_severity}")
-
-
-        # print("Class wise accuracy:")
-        # for modality, pred in enumerate(self.unimodal_test_pred):
-        #     print(f"\nModality {modality}:")
-        #     acc_class_wise = torchmetrics.classification.Accuracy(task="multiclass", num_classes=self.cfg.experiment.dataset.num_classes, average='none')
-        #     acc_class_wise = acc_class_wise(pred, self.test_target)
-        #     for i in range(self.cfg.experiment.dataset.num_classes):
-        #         print(f"Class {i} accuracy: {acc_class_wise[i].item():.4f}")
-        #     print(f"Overall accuracy:")
-        #     print(f"Micro: {torchmetrics.classification.Accuracy(task='multiclass', num_classes=self.cfg.experiment.dataset.num_classes, average= 'micro')(pred, self.test_target).item():.4f}")
-        #     print(f"Macro: {torchmetrics.classification.Accuracy(task='multiclass', num_classes=self.cfg.experiment.dataset.num_classes, average= 'macro')(pred, self.test_target).item():.4f}")
-        # print("\nMultimodal:")
-        # acc_class_wise = torchmetrics.classification.Accuracy(task="multiclass", num_classes=self.cfg.experiment.dataset.num_classes, average='none')
-        # acc_class_wise = acc_class_wise(self.test_pred, self.test_target)
-        # for i in range(self.cfg.experiment.dataset.num_classes):
-        #     print(f"Class {i} accuracy: {acc_class_wise[i].item():.4f}")
         
         for modality, pred in enumerate(self.unimodal_test_pred):
             print(f"\nModality {modality}:")
@@ -214,15 +221,15 @@ class FusionModel(LitModel):
             unimodal_2_score = metric(self.unimodal_test_pred[1], self.test_target)
             print("Test/", metric_name, score)
 
-            save_metric_json(metric_name,
-                             group_tag = self.cfg.group_tag,
-                 experiment_name=self.cfg.experiment.name,
-                 noise_setting=self.cfg.noise_severity,
-                 run_id=self.cfg.trial,
-                 multimodal=score.item(),
-                 unimodal1=unimodal_1_score.item(),
-                 unimodal2=unimodal_2_score.item(),
-                 file= "scores_"+ self.cfg.exp_setup+".json")
+            # save_metric_json(metric_name,
+            #                  group_tag = self.cfg.group_tag,
+            #      experiment_name=self.cfg.experiment.name,
+            #      noise_setting=self.cfg.noise_severity,
+            #      run_id=self.cfg.trial,
+            #      multimodal=score.item(),
+            #      unimodal1=unimodal_1_score.item(),
+            #      unimodal2=unimodal_2_score.item(),
+            #      file= "scores_"+ self.cfg.exp_setup+".json")
 
         
     
@@ -246,6 +253,7 @@ class LateFusionClassifier(FusionModel):
             'F1Score': torchmetrics.F1Score(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
         }
 
+
     def _get_cross_entropy_and_accuracy(self, batch, noise_ind) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Compute cross entropy loss and accuracy of batch.
@@ -265,13 +273,20 @@ class LateFusionClassifier(FusionModel):
         if self.cfg.random_noise_context:
             noise_ind = [torch.rand_like(noise) for noise in noise_ind]
         for unimodal_data, encoder, noise_encoder, predictor,  noise in zip(data, self.encoders, noise_encoders, self.predictors,  noise_ind):
-            if(encoder is not None):
-                embeddings += [encoder(unimodal_data)]
+            if self.cfg.fully_decoupled_training:
+                with torch.no_grad():
+                    embeddings += [encoder(unimodal_data)]
+                    corruptions += [noise_encoder(noise)]
+                    unimodal_prediction = predictor(embeddings[-1])
+            
             else:
-                embeddings += [unimodal_data]
+                if(encoder is not None):
+                    embeddings += [encoder(unimodal_data)]
+                else:
+                    embeddings += [unimodal_data]
 
-            corruptions += [noise_encoder(noise)]    
-            unimodal_prediction = predictor(embeddings[-1])
+                corruptions += [noise_encoder(noise)]    
+                unimodal_prediction = predictor(embeddings[-1])
             
 
             if(self.cfg.experiment.head.threshold_input):
@@ -279,25 +294,18 @@ class LateFusionClassifier(FusionModel):
             else:
                 predictions += [unimodal_prediction.unsqueeze(1)]
             ll_y_g_x = unimodal_prediction.log()
-            loss += self.criterion(ll_y_g_x, labels)
+            loss += self.criterion(ll_y_g_x, labels) if not self.cfg.fully_decoupled_training else 0
 
         predictions = torch.cat(predictions, dim=1)
         unimodal_predictions = torch.permute(predictions, (1,0,2))
+        context = torch.cat(embeddings, dim=-1)
         
-        if (hasattr(self.cfg.experiment.head, "noise_context") and not self.cfg.experiment.head.noise_context):
-            context = torch.cat(embeddings, dim=-1)
-
-        else:
-            context = [torch.cat((t1, t2), dim=-1) for t1, t2 in zip(embeddings, corruptions)]
-            context = torch.cat(context, dim=-1)
-
-
 
         if(not self.cfg.joint_training or self.current_epoch <=5):
-                predictions = predictions.detach()
-                context = context.detach()
-        
+            predictions = predictions.detach()
+            context = context.detach()
         predictions = self.head(predictions, context)
+
         
         # Criterion is NLL which takes logp( y | x)
         # NOTE: Don't use nn.CrossEntropyLoss because it expects unnormalized logits
@@ -309,8 +317,8 @@ class LateFusionClassifier(FusionModel):
             loss += self.head.loss[:,labels].mean()
         accuracy = (labels == ll_y_g_x.argmax(-1)).sum() / ll_y_g_x.shape[0]
         return loss, accuracy, predictions, unimodal_predictions
-    
 
+    
     
 
 class LateFusionMultiLabelClassifier(FusionModel):
