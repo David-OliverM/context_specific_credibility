@@ -10,6 +10,7 @@ __pycache__/
 scripts/
 data/
 results/
+calibration_plots/
 # Distribution / packaging
 .Python
 build/

@@ -1,5 +1,5 @@
-# Credibility_MultimodalData
-This repository contains the code for the project - **Credibility-Aware Multi-Modal Fusion Using Probabilistic Circuits**. This is under active development.
+# Context Specific Credibility aware Multimodal Fusion
+This repository contains the code for the project - **Credibility-Aware Multi-Modal FusiContext-specific Credibility-aware Multimodal Fusion with Conditional Probabilistic Circuits**(https://arxiv.org/abs/2603.26629). This is under active development.
 
 
 ## Setup
@@ -9,6 +9,7 @@ Create a new virtual environment and install the required packages given in `req
 This repository has dependencies with following three packages. They are organized in the `packages` directory.
 - [MultiBench](https://github.com/pliang279/MultiBench)
 - [RatSPN](https://github.com/braun-steven/spn-pytorch-experiments)
+- [EinsumNet](https://github.com/braun-steven/simple-einet)
 
 ## To Run
 Specify the hyperparameter configurations for your experiment in the appropriate config file inside `conf/`. 
