@@ -12,7 +12,7 @@ This repository has dependencies with following three packages. They are organiz
 - [EinsumNet](https://github.com/braun-steven/simple-einet)
 
 ## Datasets
-This repository currently supports [NYUD](https://cs.nyu.edu/~fergus/datasets/nyu_depth_v2.html) and [AVMNIST](https://github.com/yedizhang/audiovisual-mnist) datasets (can be found [here](https://drive.google.com/drive/folders/1Ij6koHLRNbPDI9reNOUQ1rLOy4CWqYqG?usp=sharing))
+This repository currently supports [NYUD](https://cs.nyu.edu/~fergus/datasets/nyu_depth_v2.html) and [AVMNIST](https://github.com/yedizhang/audiovisual-mnist) datasets (can be found [here](https://drive.google.com/drive/folders/1Ij6koHLRNbPDI9reNOUQ1rLOy4CWqYqG?usp=sharing)). You can also find pretrained unimodal predictors in the same folder.
 
 ## To Run
 Specify the hyperparameter configurations for your experiment in the appropriate config file inside `conf/`. 
