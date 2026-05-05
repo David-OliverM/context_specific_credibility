@@ -100,7 +100,7 @@ def save_metric_json(
         unimodal2,
         file="scores_noise_on_one.json"
     ):
-    filename = os.path.join("/home/pxt220000/Projects/CS_Credibility", file)
+    filename = os.path.join("/path/to/dir", file)
     print(f"Saving results to {os.path.abspath(filename)}")
     # Load existing JSON or create new
     if os.path.exists(filename):
@@ -155,7 +155,7 @@ def save_modality_wise_scores_json(
         credibility = None,
         file="scores_modality_wise.json"
     ):
-    filename = os.path.join("/home/pxt220000/Projects/CS_Credibility", file)
+    filename = os.path.join("/path/to/dir", file)
     print(f"Saving results to {os.path.abspath(filename)}")
     # Load existing JSON or create new
     if os.path.exists(filename):
@@ -221,7 +221,7 @@ def save_corruption_wise_scores_json(
     credibility = None,
     file="scores_modality_wise.json"):
 
-    filename = os.path.join("/home/pxt220000/Projects/CS_Credibility", file)
+    filename = os.path.join("/path/to/dir", file)
     print(f"Saving results to {os.path.abspath(filename)}")
     # Load existing JSON or create new
     if os.path.exists(filename):
