@@ -1,0 +1,111 @@
+
+name: "frankfurt/credibility_weighted"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}"
+  args:
+    modality_grouping: "dopamine"   # 'anatomical' | 'dopamine' | 'yeo7'(STUB)
+    n_splits: 5
+    fold: 0
+  modalities: 4
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+# Modality input dims (FC upper-triangle, k*(k-1)/2):
+#   dorsal_striatum:        k=6   -> in_dim=15
+#   ventral_striatum:       k=2   -> in_dim=1
+#   da_projection_cortex:   k=12  -> in_dim=66
+#   other:                  k=111 -> in_dim=6105
+# (midbrain_proxy: k=1 -> dropped automatically, see _dopamine_grouping)
+
+encoders:
+  dorsal_striatum:
+    type: "MLPEncoder"
+    args:
+      in_dim: 15
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.2
+
+  ventral_striatum:
+    type: "MLPEncoder"
+    args:
+      in_dim: 1
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 32
+      dropout: 0.2
+
+  da_projection_cortex:
+    type: "MLPEncoder"
+    args:
+      in_dim: 66
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.2
+
+  other:
+    type: "MLPEncoder"
+    args:
+      in_dim: 6105
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.2
+
+
+predictors:
+  dorsal_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  ventral_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  da_projection_cortex:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  other:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+head:
+  type: "CredibilityWeightedMean"
+  threshold_input: False
+  args:
+    num_features: ${experiment.dataset.modalities}
+    num_channels: 1
+    depth: 1
+    num_sums: 20
+    num_leaves: 20
+    num_repetitions: 20
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: 'Dirichlet'
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: False
+    layer_type: 'einsum'
+    dropout: 0.2

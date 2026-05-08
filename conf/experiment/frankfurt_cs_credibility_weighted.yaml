@@ -1,0 +1,113 @@
+
+name: "frankfurt/cs_credibility_weighted"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}"
+  args:
+    modality_grouping: "dopamine"
+    n_splits: 5
+    fold: 0
+  modalities: 4
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+encoders:
+  dorsal_striatum:
+    type: "MLPEncoder"
+    args:
+      in_dim: 15
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.3
+
+  ventral_striatum:
+    type: "MLPEncoder"
+    args:
+      in_dim: 1
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 32
+      dropout: 0.3
+
+  da_projection_cortex:
+    type: "MLPEncoder"
+    args:
+      in_dim: 66
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.3
+
+  other:
+    type: "MLPEncoder"
+    args:
+      in_dim: 6105
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.3
+
+
+predictors:
+  dorsal_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  ventral_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  da_projection_cortex:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  other:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+head:
+  type: "CredibilityWeightedMean"
+  threshold_input: False
+  args:
+    num_features: ${experiment.dataset.modalities}
+    num_channels: 1
+    depth: 1
+    num_sums: 20
+    num_leaves: 20
+    num_repetitions: 20
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: 'Dirichlet'
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: False
+    layer_type: 'einsum'
+    dropout: 0.3
+    conditional_sum: True
+    sum_cond_fn_type: 'Classifier'
+    sum_cond_fn_args:
+      # context = concat of encoder embeddings = 4 * 64 = 256
+      in_dim: 256
+      n_layers: 3
+      n_hidden: 64
+      final_activation: None
+      out_dim: None

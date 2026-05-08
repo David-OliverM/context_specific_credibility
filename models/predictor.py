@@ -49,6 +49,41 @@ def make_head(
     return torch.nn.Sequential(*layers)
 
 
+class MLPEncoder(torch.nn.Module):
+    """Plain feed-forward encoder for tabular / pre-extracted features.
+
+    Used by the Frankfurt fMRI pipeline (FC upper-triangular vectors per
+    modality).  Accepts `freeze_params` to match the FusionModel kwargs
+    convention; everything else is the same as `make_encoder`.
+    """
+
+    def __init__(
+        self,
+        in_dim,
+        embed_dim=64,
+        n_layers=2,
+        n_hidden=128,
+        activation='torch.nn.Tanh()',
+        dropout=0.0,
+        freeze_params=False,
+    ):
+        super().__init__()
+        self.encoder = make_encoder(
+            in_dim=in_dim,
+            embed_dim=embed_dim,
+            n_layers=n_layers,
+            n_hidden=n_hidden,
+            activation=activation,
+            dropout=dropout,
+        )
+        if freeze_params:
+            for p in self.parameters():
+                p.requires_grad = False
+
+    def forward(self, x, **kwargs):
+        return self.encoder(x)
+
+
 class Classifier(torch.nn.Module):
     def __init__(
         self,
