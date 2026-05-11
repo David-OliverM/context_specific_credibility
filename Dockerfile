@@ -50,19 +50,10 @@ ENV FSDD_PATH=/data/csc_datasets/fsdd/recordings
 
 WORKDIR /workspace
 
-# At container start, vendor the torchfsdd lib into the bind-mounted workspace
-# if it isn't already there. This is a no-op on subsequent runs.
-COPY <<'EOF' /usr/local/bin/c2mf-entrypoint.sh
-#!/usr/bin/env bash
-set -e
-LIB_DIR="/workspace/packages/torchfsdd/lib/torchfsdd"
-if [ -d "/workspace/packages/torchfsdd" ] && [ ! -d "$LIB_DIR" ]; then
-    mkdir -p "$LIB_DIR"
-    cp -r /opt/torchfsdd-stage/torch-fsdd-1.0.0/lib/torchfsdd/* "$LIB_DIR/"
-    echo "[c2mf-entrypoint] vendored torchfsdd lib into $LIB_DIR"
-fi
-exec "$@"
-EOF
+# Entrypoint script lives in the repo at docker/c2mf-entrypoint.sh — see that
+# file for what it does. Kept as a separate file so this Dockerfile builds
+# under the legacy builder (DGX rootless Docker has no buildx).
+COPY docker/c2mf-entrypoint.sh /usr/local/bin/c2mf-entrypoint.sh
 RUN chmod +x /usr/local/bin/c2mf-entrypoint.sh
 
 ENTRYPOINT ["/usr/local/bin/c2mf-entrypoint.sh"]
