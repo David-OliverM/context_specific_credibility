@@ -32,6 +32,7 @@ debug: False
 gpu: 0
 epochs: 50
 load_and_eval: False
+resume_ckpt: null  # path to a Lightning .ckpt to resume training from; null = train from scratch
 precision: 64
 group_tag: ???
 tag: ${experiment.name}/T${trial}/noise_${noise_severity}
