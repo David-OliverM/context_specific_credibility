@@ -166,9 +166,17 @@ class FusionModel(LitModel):
 
                 
     def log_metrics(self, probs, targets, mode='Train/', **kwargs):
-        probs, targets = probs.detach().cpu(), targets.detach().cpu()
+        # Do not call self.metrics[name](probs, targets) and log the returned tensor:
+        # for AUROC / F1 / Precision / Recall, that gives a per-batch value that
+        # Lightning then averages with batch-size weights — which is mathematically
+        # wrong for ranking-based metrics (was off by ~30x in the upstream repo;
+        # see paper/outline/c2mf-reproduction-recipe.md §7.5 and thesis findings).
+        # Instead: .update() the accumulator each batch, log the Metric INSTANCE
+        # itself, and Lightning calls .compute() once at epoch end and .reset()
+        # automatically.
         for metric_name in self.metrics:
-            self.log(f"{mode}{metric_name}",self.metrics[metric_name](probs, targets),**kwargs)
+            self.metrics[metric_name].update(probs.detach(), targets.detach())
+            self.log(f"{mode}{metric_name}", self.metrics[metric_name], **kwargs)
         
     def _get_cross_entropy_and_accuracy(self, batch) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
@@ -244,14 +252,18 @@ class LateFusionClassifier(FusionModel):
         super().__init__(cfg, name=name, steps_per_epoch=steps_per_epoch)
 
     def configure_metrics(self):
-        self.metrics = {
+        # nn.ModuleDict registers the metrics as submodules so Lightning tracks
+        # them: required for the log_metrics() pattern to call .compute() and
+        # .reset() at epoch end correctly. Plain dict would lose Lightning's
+        # auto-aggregation handling.
+        self.metrics = nn.ModuleDict({
             'Accuracy':  torchmetrics.Accuracy(task="multiclass", average='micro', num_classes=self.cfg.experiment.dataset.num_classes),
             # 'Accuracy_macro':  torchmetrics.Accuracy(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'AUROC': torchmetrics.AUROC(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'Precision': torchmetrics.Precision(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'Recall': torchmetrics.Recall(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'F1Score': torchmetrics.F1Score(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
-        }
+        })
 
 
     def _get_cross_entropy_and_accuracy(self, batch, noise_ind) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -332,13 +344,13 @@ class LateFusionMultiLabelClassifier(FusionModel):
         self.accuracy = torchmetrics.Accuracy(task="multilabel", num_labels= self.cfg.experiment.dataset.num_classes)
         
     def configure_metrics(self):
-        self.metrics = {
+        self.metrics = nn.ModuleDict({
             'AUROC': torchmetrics.AUROC(task="multilabel", average='weighted', num_labels= self.cfg.experiment.dataset.num_classes),
             'Precision': torchmetrics.Precision(task="multilabel", average='weighted', num_labels= self.cfg.experiment.dataset.num_classes),
             'Recall': torchmetrics.Recall(task="multilabel", average='weighted', num_labels= self.cfg.experiment.dataset.num_classes),
             'F1Score': torchmetrics.F1Score(task="multilabel", average='weighted', num_labels= self.cfg.experiment.dataset.num_classes),
             'Accuracy': torchmetrics.Accuracy(task="multilabel", average='weighted', num_labels= self.cfg.experiment.dataset.num_classes),
-        }
+        })
 
     def _get_cross_entropy_and_accuracy(self, batch) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -384,12 +396,12 @@ class EarlyFusionDiscriminative(FusionModel):
         super().__init__(cfg, name=name, steps_per_epoch=steps_per_epoch)
 
     def configure_metrics(self):
-        self.metrics = {
+        self.metrics = nn.ModuleDict({
             'AUROC': torchmetrics.AUROC(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'Precision': torchmetrics.Precision(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'Recall': torchmetrics.Recall(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'F1Score': torchmetrics.F1Score(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
-        }
+        })
 
     def _get_cross_entropy_and_accuracy(self, batch) -> Tuple[torch.Tensor, torch.Tensor]:
         """
