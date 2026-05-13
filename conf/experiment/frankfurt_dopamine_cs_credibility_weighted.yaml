@@ -1,27 +1,37 @@
-
-name: "frankfurt/cs_credibility_weighted"
+name: "frankfurt/dopamine_cs_credibility_weighted"
 classification: True
 multilabel: False
 dataset:
   name: "frankfurt"
-  path: "${data_dir}"
+  # Loader reads modality buckets from code/conf/grouping/dopamine_circuit_v2.csv
+  # (Lorina Zapf 2026-05-07 explicit definition). `path` is the directory with
+  # Amisulpride/, LDopa/, Placebo/, ROI_labels.txt.
+  path: "${data_dir}/neuro_data_UKF"
   args:
     modality_grouping: "dopamine"
     n_splits: 5
     fold: 0
+  # 4 effective modalities; nominal 5 minus midbrain_proxy (Brain-Stem k=1
+  # falls through the k>=2 filter at runtime).
   modalities: 4
   batch_size: ${batch_size}
   num_classes: 3
   class_names: ["Amisulpride", "LDopa", "Placebo"]
 
+# In-dim values match dopamine_circuit_v2.csv (Lorina-aligned v2):
+#   dorsal_striatum  (Caudate + Putamen L/R, k=4)            -> in_dim=6
+#   ventral_striatum (Accumbens L/R, k=2)                    -> in_dim=1
+#   da_projection_cortex (vmPFC + OFC + ACC + Amygdala
+#                         + dlPFC, k=13)                     -> in_dim=78
+#   other (everything else, k=112)                           -> in_dim=6216
 encoders:
   dorsal_striatum:
     type: "MLPEncoder"
     args:
-      in_dim: 15
+      in_dim: 6
       embed_dim: 64
       n_layers: 2
-      n_hidden: 128
+      n_hidden: 64
       dropout: 0.3
 
   ventral_striatum:
@@ -36,7 +46,7 @@ encoders:
   da_projection_cortex:
     type: "MLPEncoder"
     args:
-      in_dim: 66
+      in_dim: 78
       embed_dim: 64
       n_layers: 2
       n_hidden: 128
@@ -45,10 +55,10 @@ encoders:
   other:
     type: "MLPEncoder"
     args:
-      in_dim: 6105
+      in_dim: 6216
       embed_dim: 64
       n_layers: 2
-      n_hidden: 128
+      n_hidden: 256
       dropout: 0.3
 
 
