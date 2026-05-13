@@ -152,22 +152,84 @@ def _dopamine_grouping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
     return {k: v for k, v in out.items() if len(v) >= 2}
 
 
+# Bucket order matches Yeo 2011 network ordering, with two auxiliary trailing
+# buckets for ROIs outside the cortical Yeo-7 definition (subcortex + cerebellum).
+_YEO7_BUCKET_ORDER = (
+    "VIS", "SOMMOT", "DORSATTN", "VENTATTN", "LIMBIC", "CONT", "DEFAULT",
+    "SUBCORTICAL", "CEREBELLAR",
+)
+
+_YEO7_CSV_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / "conf" / "grouping" / "yeo7_frankfurt_v2_symmetric.csv"
+)
+
+
+def _load_yeo7_csv(csv_path: Path) -> dict[int, str]:
+    """Returns {roi_idx: bucket_label}, parsed from the v1 mapping CSV.
+
+    The CSV is a hand-derived heuristic; see code/conf/grouping/README.md for
+    rationale and known limitations.  An MNI-overlay verification step is
+    pending (see scripts/verify_yeo7_mapping.py once landed).
+    """
+    out: dict[int, str] = {}
+    with open(csv_path) as f:
+        header = f.readline().strip().split(",")
+        idx_col = header.index("roi_idx")
+        net_col = header.index("yeo7_network")
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(",")
+            out[int(parts[idx_col])] = parts[net_col].strip()
+    return out
+
+
 def _yeo7_mapping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
     """Yeo-7 functional networks (Yeo et al. 2011, Cerebral Cortex).
 
-    TODO(yeo7): The mapping below is a STUB.  A proper implementation requires
-    the Yeo-7 network assignment per Harvard-Oxford+AAL ROI, which is not
-    derivable from ROI names alone -- it has to be looked up in
-    Yeo et al. 2011 (Cerebral Cortex) Tables 1 / S1, OR derived by overlaying
-    the atlases in MNI space (e.g. via nilearn) and taking the modal Yeo-7
-    label per ROI.
+    Loads code/conf/grouping/yeo7_frankfurt_v2_symmetric.csv: a per-ROI
+    assignment derived by overlaying nilearn's Yeo-2011 7-network MNI152
+    template on the Harvard-Oxford cortical labelmap (cort-maxprob-thr25-2mm)
+    and taking the modal Yeo label per ROI mask, with L+R pairs constrained
+    to share a bucket (combined-voxel-argmax).  Subcortical (15) and
+    cerebellar+vermis (26) ROIs are routed into auxiliary SUBCORTICAL and
+    CEREBELLAR buckets since Yeo-7 is not defined off-cortex.
 
-    For now this falls back to the anatomical 3-way grouping so the code
-    runs end-to-end; the user must replace this with the real mapping
-    before any Yeo-7 results are reported.
+    Provenance: paper/scripts/verify_yeo7_mapping.py.
+    Audit trail: code/conf/grouping/yeo7_v1_vs_v2_diff.md compares this v2
+    mapping against the prior v1 heuristic.
     """
-    # FALLBACK / STUB.  Replace before reporting any "Yeo-7" results!
-    return _anatomical_grouping(roi_labels)
+    if len(roi_labels) != 132:
+        raise ValueError(
+            f"yeo7 mapping expects 132 ROIs (Frankfurt atlas); got {len(roi_labels)}. "
+            "If this is a new ROI set the mapping CSV needs to be re-derived."
+        )
+    if not _YEO7_CSV_PATH.exists():
+        raise FileNotFoundError(
+            f"Yeo-7 mapping CSV not found at {_YEO7_CSV_PATH}. "
+            "Cannot proceed without explicit mapping (refuse silent fallback)."
+        )
+    print(
+        f"[frankfurt] Yeo-7 mapping loaded from {_YEO7_CSV_PATH.name} "
+        "(MNI-overlay verified, L=R symmetric). "
+        "See code/conf/grouping/README.md for provenance."
+    )
+    idx_to_bucket = _load_yeo7_csv(_YEO7_CSV_PATH)
+    out: dict[str, list[int]] = {b: [] for b in _YEO7_BUCKET_ORDER}
+    for i in range(len(roi_labels)):
+        bucket = idx_to_bucket.get(i)
+        if bucket is None:
+            raise ValueError(f"ROI idx {i} ({roi_labels[i]}) missing from Yeo-7 CSV")
+        if bucket not in out:
+            raise ValueError(
+                f"ROI idx {i} ({roi_labels[i]}) has unknown bucket '{bucket}'; "
+                f"expected one of {_YEO7_BUCKET_ORDER}"
+            )
+        out[bucket].append(i)
+    # Drop buckets with <2 ROIs (k<2 -> empty FC upper triangle).
+    return {k: v for k, v in out.items() if len(v) >= 2}
 
 
 GROUPING_FNS = {
