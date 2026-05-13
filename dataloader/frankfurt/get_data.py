@@ -105,51 +105,17 @@ def _anatomical_grouping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
     return out
 
 
-def _dopamine_grouping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
-    """Domain-motivated dopamine-circuit grouping (Lab recommendation).
+# Bucket order for the dopamine-circuit grouping.  Lorina Zapf (UKF) defined
+# four primary buckets plus an `other` catch-all so no ROI is silently dropped.
+_DOPAMINE_BUCKET_ORDER = (
+    "dorsal_striatum", "ventral_striatum", "midbrain_proxy",
+    "da_projection_cortex", "other",
+)
 
-    M = 4 buckets:
-      - dorsal_striatum      : Caudate / Putamen / Pallidum (L+R)
-      - ventral_striatum     : Accumbens (L+R)
-      - midbrain_proxy       : Brain-Stem  (NOTE: Harvard-Oxford has no clean
-                               VTA/SN ROI; Brain-Stem is the closest proxy)
-      - da_projection_cortex : vmPFC / OFC / ACC / dlPFC heuristic
-                               (matches Frontal Medial Cortex, Frontal Pole,
-                                Frontal Orbital Cortex, Cingulate Anterior,
-                                Superior+Middle Frontal Gyrus, ParaCing).
-
-    Anything that doesn't match goes into a 5th `other` bucket so we never
-    drop ROIs silently.  Only non-empty buckets become modalities.
-    """
-    DORSAL = re.compile(r"^(Caudate|Putamen|Pallidum)", re.IGNORECASE)
-    VENTRAL = re.compile(r"^(Accumbens)", re.IGNORECASE)
-    MIDBRAIN = re.compile(r"^(Brain-Stem)", re.IGNORECASE)
-    # DA-projection cortex heuristic - matches Harvard-Oxford label tokens.
-    PROJECTION = re.compile(
-        r"^(MedFC|FP|FOrb|aCG|pCG|SubCalC|PaCiG|SFG|MidFG|FrOper)",
-        re.IGNORECASE,
-    )
-
-    out: dict[str, list[int]] = {
-        "dorsal_striatum": [],
-        "ventral_striatum": [],
-        "midbrain_proxy": [],
-        "da_projection_cortex": [],
-        "other": [],
-    }
-    for i, lab in enumerate(roi_labels):
-        if DORSAL.match(lab):
-            out["dorsal_striatum"].append(i)
-        elif VENTRAL.match(lab):
-            out["ventral_striatum"].append(i)
-        elif MIDBRAIN.match(lab):
-            out["midbrain_proxy"].append(i)
-        elif PROJECTION.match(lab):
-            out["da_projection_cortex"].append(i)
-        else:
-            out["other"].append(i)
-    # Drop buckets with <2 ROIs (k<2 -> empty FC upper triangle, breaks MLP).
-    return {k: v for k, v in out.items() if len(v) >= 2}
+_DOPAMINE_CSV_PATH = (
+    Path(__file__).resolve().parent.parent.parent
+    / "conf" / "grouping" / "dopamine_circuit_v2.csv"
+)
 
 
 # Bucket order matches Yeo 2011 network ordering, with two auxiliary trailing
@@ -165,25 +131,61 @@ _YEO7_CSV_PATH = (
 )
 
 
-def _load_yeo7_csv(csv_path: Path) -> dict[int, str]:
-    """Returns {roi_idx: bucket_label}, parsed from the v1 mapping CSV.
+def _load_bucket_csv(csv_path: Path, bucket_column: str) -> dict[int, str]:
+    """Returns {roi_idx: bucket_label}, parsed from a mapping CSV.
 
-    The CSV is a hand-derived heuristic; see code/conf/grouping/README.md for
-    rationale and known limitations.  An MNI-overlay verification step is
-    pending (see scripts/verify_yeo7_mapping.py once landed).
+    Generic loader used by both _yeo7_mapping and _dopamine_grouping.
+    Expects a header line with 'roi_idx' and the requested bucket_column.
     """
     out: dict[int, str] = {}
     with open(csv_path) as f:
         header = f.readline().strip().split(",")
         idx_col = header.index("roi_idx")
-        net_col = header.index("yeo7_network")
+        b_col = header.index(bucket_column)
         for line in f:
             line = line.strip()
             if not line:
                 continue
             parts = line.split(",")
-            out[int(parts[idx_col])] = parts[net_col].strip()
+            out[int(parts[idx_col])] = parts[b_col].strip()
     return out
+
+
+def _grouping_from_csv(roi_labels: Sequence[str], csv_path: Path,
+                      bucket_order: tuple, bucket_column: str,
+                      grouping_name: str, log_message: str) -> dict[str, list[int]]:
+    """Generic CSV-driven grouping builder.  Validates ROI count, ensures
+    every ROI is assigned a known bucket, drops buckets with k<2.
+    """
+    if len(roi_labels) != 132:
+        raise ValueError(
+            f"{grouping_name} mapping expects 132 ROIs (Frankfurt atlas); "
+            f"got {len(roi_labels)}. The mapping CSV would need to be re-derived "
+            "for a different ROI set."
+        )
+    if not csv_path.exists():
+        raise FileNotFoundError(
+            f"{grouping_name} mapping CSV not found at {csv_path}. "
+            "Cannot proceed without explicit mapping (refuse silent fallback)."
+        )
+    print(f"[frankfurt] {log_message}")
+    idx_to_bucket = _load_bucket_csv(csv_path, bucket_column)
+    out: dict[str, list[int]] = {b: [] for b in bucket_order}
+    for i in range(len(roi_labels)):
+        bucket = idx_to_bucket.get(i)
+        if bucket is None:
+            raise ValueError(
+                f"ROI idx {i} ({roi_labels[i]}) missing from {grouping_name} CSV "
+                f"({csv_path.name})"
+            )
+        if bucket not in out:
+            raise ValueError(
+                f"ROI idx {i} ({roi_labels[i]}) has unknown bucket '{bucket}'; "
+                f"expected one of {bucket_order}"
+            )
+        out[bucket].append(i)
+    # Drop buckets with <2 ROIs (k<2 -> empty FC upper triangle).
+    return {k: v for k, v in out.items() if len(v) >= 2}
 
 
 def _yeo7_mapping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
@@ -201,35 +203,49 @@ def _yeo7_mapping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
     Audit trail: code/conf/grouping/yeo7_v1_vs_v2_diff.md compares this v2
     mapping against the prior v1 heuristic.
     """
-    if len(roi_labels) != 132:
-        raise ValueError(
-            f"yeo7 mapping expects 132 ROIs (Frankfurt atlas); got {len(roi_labels)}. "
-            "If this is a new ROI set the mapping CSV needs to be re-derived."
-        )
-    if not _YEO7_CSV_PATH.exists():
-        raise FileNotFoundError(
-            f"Yeo-7 mapping CSV not found at {_YEO7_CSV_PATH}. "
-            "Cannot proceed without explicit mapping (refuse silent fallback)."
-        )
-    print(
-        f"[frankfurt] Yeo-7 mapping loaded from {_YEO7_CSV_PATH.name} "
-        "(MNI-overlay verified, L=R symmetric). "
-        "See code/conf/grouping/README.md for provenance."
+    return _grouping_from_csv(
+        roi_labels, _YEO7_CSV_PATH, _YEO7_BUCKET_ORDER,
+        bucket_column="yeo7_network",
+        grouping_name="Yeo-7",
+        log_message=(
+            f"Yeo-7 mapping loaded from {_YEO7_CSV_PATH.name} "
+            "(MNI-overlay verified, L=R symmetric). "
+            "See code/conf/grouping/README.md for provenance."
+        ),
     )
-    idx_to_bucket = _load_yeo7_csv(_YEO7_CSV_PATH)
-    out: dict[str, list[int]] = {b: [] for b in _YEO7_BUCKET_ORDER}
-    for i in range(len(roi_labels)):
-        bucket = idx_to_bucket.get(i)
-        if bucket is None:
-            raise ValueError(f"ROI idx {i} ({roi_labels[i]}) missing from Yeo-7 CSV")
-        if bucket not in out:
-            raise ValueError(
-                f"ROI idx {i} ({roi_labels[i]}) has unknown bucket '{bucket}'; "
-                f"expected one of {_YEO7_BUCKET_ORDER}"
-            )
-        out[bucket].append(i)
-    # Drop buckets with <2 ROIs (k<2 -> empty FC upper triangle).
-    return {k: v for k, v in out.items() if len(v) >= 2}
+
+
+def _dopamine_grouping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
+    """Dopamine-circuit grouping after Lorina Zapf (UKF, 2026-05-07).
+
+    Loads code/conf/grouping/dopamine_circuit_v2.csv: a per-ROI assignment
+    of the 132 Frankfurt ROIs into five buckets representing the canonical
+    cortico-striato-mesencephalic dopamine circuit:
+
+      - dorsal_striatum      : Caudate, Putamen (L+R) - primary D2/D3 sites
+      - ventral_striatum     : Accumbens (L+R)        - mesolimbic reward
+      - midbrain_proxy       : Brain-Stem (single ROI) - VTA/SN proxy; falls
+                               through the k>=2 filter and is dropped at
+                               training time, leaving M=4 effective
+      - da_projection_cortex : vmPFC, OFC, ACC, Amygdala, dlPFC components
+                               (13 cortical+subcortical ROIs)
+      - other                : every ROI not in Lorina's explicit circuit
+                               (112 ROIs); kept so no data is silently lost
+
+    Provenance: thesis/correspondence/2026-05-07_zapf_data-questions.pdf
+    plus the v1 heuristic that preceded Lorina's reply (kept in the audit
+    trail at code/conf/grouping/README.md).
+    """
+    return _grouping_from_csv(
+        roi_labels, _DOPAMINE_CSV_PATH, _DOPAMINE_BUCKET_ORDER,
+        bucket_column="dopamine_bucket",
+        grouping_name="Dopamine-Circuit",
+        log_message=(
+            f"Dopamine-circuit mapping loaded from {_DOPAMINE_CSV_PATH.name} "
+            "(Lorina Zapf 2026-05-07; midbrain_proxy k=1 dropped). "
+            "See code/conf/grouping/README.md for provenance."
+        ),
+    )
 
 
 GROUPING_FNS = {

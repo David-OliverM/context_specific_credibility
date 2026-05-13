@@ -1,10 +1,22 @@
-# Yeo-7 Modality Grouping for Frankfurt fMRI (C²MF)
+# Modality Grouping Artefacts for Frankfurt fMRI (C²MF)
 
-> Status: **v2_symmetric is the production mapping** (loaded by `dataloader/frankfurt/get_data.py:_yeo7_mapping`).
-> v1 and v2 (raw) are kept in the repo as audit trail only.
+> Status: two production mappings ship in this directory, both loaded at runtime
+> by `dataloader/frankfurt/get_data.py`.
 > Last verified: 2026-05-13.
 
+This directory holds the CSV-based modality-bucket definitions that turn the
+132 Frankfurt ROIs into a small set of C²MF modalities. Two mappings are
+production-ready and selectable via the Hydra `modality_grouping` switch:
+
+- **Yeo-7 functional networks** (`modality_grouping: yeo7`)
+- **Dopamine-circuit after Lorina Zapf** (`modality_grouping: dopamine`)
+
+A third option, `modality_grouping: anatomical`, is a tiny 3-bucket
+sanity-baseline that lives in code (no CSV needed).
+
 ## Files
+
+### Yeo-7 mapping (primary, M=9 functional networks)
 
 | File | Status | Purpose |
 |---|---|---|
@@ -12,7 +24,28 @@
 | `yeo7_frankfurt_v2.csv` | audit | Raw per-hemisphere overlay result. Six L/R pairs disagree; resolved in v2_symmetric. |
 | `yeo7_frankfurt_v1.csv` | superseded | Initial heuristic derived from anatomical-label reasoning. Kept for diff transparency. |
 | `yeo7_v1_vs_v2_diff.md` | audit | Per-ROI agreement / disagreement report between v1 and v2 plus the symmetry-enforcement step. |
-| `README.md` | doc | this file. |
+
+Reproducing script: `paper/scripts/verify_yeo7_mapping.py`. Vault documentation:
+`vault/methods/Yeo-7 Mapping for Frankfurt ROIs.md`.
+
+### Dopamine-circuit mapping (secondary, M=4 effective)
+
+| File | Status | Purpose |
+|---|---|---|
+| `dopamine_circuit_v2.csv` | **production** | Lorina Zapf's explicit cortico-striato-mesencephalic dopamine circuit definition (UKF, 2026-05-07). |
+
+The mapping has five nominal buckets (`dorsal_striatum`, `ventral_striatum`,
+`midbrain_proxy`, `da_projection_cortex`, `other`). Brain-Stem with k=1 falls
+through the k>=2 filter, reducing effective M to 4. Vault documentation:
+`vault/methods/Dopamine-Circuit Mapping for Frankfurt ROIs.md`. There is no
+v1 CSV in the repo because the pre-Lorina v1 mapping was a hard-coded regex
+inside `_dopamine_grouping`; v2 is the first persisted version.
+
+### Doc
+
+| File | Purpose |
+|---|---|
+| `README.md` | this file. |
 
 ## Production mapping (v2_symmetric) bucket counts
 

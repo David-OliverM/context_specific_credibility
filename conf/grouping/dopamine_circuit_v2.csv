@@ -1,0 +1,133 @@
+roi_idx,roi_token,atlas,dopamine_bucket,confidence,note
+0,FP_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+1,FP_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+2,IC_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+3,IC_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+4,SFG_R,HO_cortical,da_projection_cortex,lorina-explicit,dlPFC component
+5,SFG_L,HO_cortical,da_projection_cortex,lorina-explicit,dlPFC component
+6,MidFG_R,HO_cortical,da_projection_cortex,lorina-explicit,dlPFC component
+7,MidFG_L,HO_cortical,da_projection_cortex,lorina-explicit,dlPFC component
+8,IFGtri_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+9,IFGtri_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+10,IFGoper_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+11,IFGoper_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+12,PreCG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+13,PreCG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+14,TP_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+15,TP_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+16,aSTG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+17,aSTG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+18,pSTG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+19,pSTG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+20,aMTG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+21,aMTG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+22,pMTG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+23,pMTG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+24,toMTG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+25,toMTG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+26,aITG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+27,aITG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+28,pITG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+29,pITG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+30,toITG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+31,toITG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+32,PostCG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+33,PostCG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+34,SPL_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+35,SPL_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+36,aSMG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+37,aSMG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+38,pSMG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+39,pSMG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+40,AG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+41,AG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+42,sLOC_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+43,sLOC_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+44,iLOC_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+45,iLOC_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+46,ICC_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+47,ICC_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+48,MedFC,HO_cortical,da_projection_cortex,lorina-explicit,vmPFC component (Frontal Medial Cortex = medial prefrontal)
+49,SMA_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+50,SMA_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+51,SubCalC,HO_cortical,da_projection_cortex,lorina-explicit,vmPFC component (Subcallosal Cortex = subgenual vmPFC)
+52,PaCiG_R,HO_cortical,da_projection_cortex,lorina-explicit,ACC component (Paracingulate Gyrus = dorsal ACC region)
+53,PaCiG_L,HO_cortical,da_projection_cortex,lorina-explicit,ACC component (Paracingulate Gyrus = dorsal ACC region)
+54,AC,HO_cortical,da_projection_cortex,lorina-explicit,ACC component (Anterior Cingulate Gyrus = pregenual + dorsal ACC)
+55,PC,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+56,Precuneous,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+57,Cuneal_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+58,Cuneal_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+59,FOrb_R,HO_cortical,da_projection_cortex,lorina-explicit,OFC component (Frontal Orbital Cortex)
+60,FOrb_L,HO_cortical,da_projection_cortex,lorina-explicit,OFC component (Frontal Orbital Cortex)
+61,aPaHC_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+62,aPaHC_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+63,pPaHC_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+64,pPaHC_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+65,LG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+66,LG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+67,aTFusC_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+68,aTFusC_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+69,pTFusC_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+70,pTFusC_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+71,TOFusC_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+72,TOFusC_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+73,OFusG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+74,OFusG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+75,FO_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+76,FO_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+77,CO_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+78,CO_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+79,PO_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+80,PO_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+81,PP_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+82,PP_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+83,HG_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+84,HG_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+85,PT_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+86,PT_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+87,SCC_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+88,SCC_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+89,OP_R,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+90,OP_L,HO_cortical,other,na,not in Lorina's dopamine circuit definition
+91,Thalamus_R,HO_subcortical,other,na,not in Lorina's explicit circuit; thalamic relay in cortico-striato-thalamo-cortical loop
+92,Thalamus_L,HO_subcortical,other,na,not in Lorina's explicit circuit; thalamic relay in cortico-striato-thalamo-cortical loop
+93,Caudate_R,HO_subcortical,dorsal_striatum,lorina-explicit,Caudate = primary D2/D3 binding site
+94,Caudate_L,HO_subcortical,dorsal_striatum,lorina-explicit,Caudate = primary D2/D3 binding site
+95,Putamen_R,HO_subcortical,dorsal_striatum,lorina-explicit,Putamen = primary D2/D3 binding site
+96,Putamen_L,HO_subcortical,dorsal_striatum,lorina-explicit,Putamen = primary D2/D3 binding site
+97,Pallidum_R,HO_subcortical,other,na,Globus pallidus; not in Lorina's strict dorsal-striatum (basal ganglia output stage)
+98,Pallidum_L,HO_subcortical,other,na,Globus pallidus; not in Lorina's strict dorsal-striatum (basal ganglia output stage)
+99,Hippocampus_R,HO_subcortical,other,na,not in Lorina's dopamine circuit definition
+100,Hippocampus_L,HO_subcortical,other,na,not in Lorina's dopamine circuit definition
+101,Amygdala_R,HO_subcortical,da_projection_cortex,lorina-explicit,mesolimbic target (Amygdala receives VTA projections)
+102,Amygdala_L,HO_subcortical,da_projection_cortex,lorina-explicit,mesolimbic target (Amygdala receives VTA projections)
+103,Accumbens_R,HO_subcortical,ventral_striatum,lorina-explicit,Nucleus Accumbens = ventral striatum (reward / mesolimbic)
+104,Accumbens_L,HO_subcortical,ventral_striatum,lorina-explicit,Nucleus Accumbens = ventral striatum (reward / mesolimbic)
+105,Brain-Stem,HO_subcortical,midbrain_proxy,lorina-explicit,VTA/SN proxy (HO has no dedicated midbrain ROI); k=1 single ROI, falls k>=2 filter
+106,Cereb1_L,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+107,Cereb1_R,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+108,Cereb2_L,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+109,Cereb2_R,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+110,Cereb3_L,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+111,Cereb3_R,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+112,Cereb45_L,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+113,Cereb45_R,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+114,Cereb6_L,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+115,Cereb6_R,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+116,Cereb7_L,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+117,Cereb7_R,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+118,Cereb8_L,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+119,Cereb8_R,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+120,Cereb9_L,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+121,Cereb9_R,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+122,Cereb10_L,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+123,Cereb10_R,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+124,Ver12,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+125,Ver3,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+126,Ver45,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+127,Ver6,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+128,Ver7,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+129,Ver8,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+130,Ver9,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
+131,Ver10,AAL_cerebellar,other,na,not in Lorina's dopamine circuit definition
