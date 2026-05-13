@@ -110,15 +110,77 @@ encoders:
 
 
 predictors:
-  VIS:         { type: "Classifier", args: { in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64 } }
-  SOMMOT:      { type: "Classifier", args: { in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64 } }
-  DORSATTN:    { type: "Classifier", args: { in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64 } }
-  VENTATTN:    { type: "Classifier", args: { in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64 } }
-  LIMBIC:      { type: "Classifier", args: { in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64 } }
-  CONT:        { type: "Classifier", args: { in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64 } }
-  DEFAULT:     { type: "Classifier", args: { in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64 } }
-  SUBCORTICAL: { type: "Classifier", args: { in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64 } }
-  CEREBELLAR:  { type: "Classifier", args: { in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64 } }
+  VIS:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  SOMMOT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  DORSATTN:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  VENTATTN:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  LIMBIC:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  CONT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  DEFAULT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  SUBCORTICAL:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  CEREBELLAR:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
 
 head:
   type: "CredibilityWeightedMean"
