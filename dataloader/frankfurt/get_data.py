@@ -4,7 +4,7 @@ Loads the 135-scan Frankfurt-Neurodata-UKF dataset (45 subjects x 3 conditions)
 and returns per-modality functional-connectivity (FC) feature vectors plus the
 drug label.
 
-Key facts (verified at /Users/david-oliver.matzka/dev/paper/notebooks/01_explore_frankfurt_neurodata.ipynb):
+Key facts (verified at /Users/david-oliver.matzka/dev/research-C2MF/paper/notebooks/01_explore_frankfurt_neurodata.ipynb):
 - 132 ROIs (Harvard-Oxford + AAL cerebellum); ROI label file shipped alongside CSVs.
 - 267 timesteps per scan; 2 outliers (LDopa/Subject001, Placebo/Subject003) at
   268 -> truncated to 267.
@@ -376,7 +376,7 @@ def get_dataloader(
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser()
-    p.add_argument("--data_dir", default=os.path.expanduser("~/dev/paper/neuro_data_UKF"))
+    p.add_argument("--data_dir", default=os.path.expanduser("~/dev/research-C2MF/paper/neuro_data_UKF"))
     p.add_argument("--grouping", default="anatomical")
     args = p.parse_args()
     tl, vl, te = get_dataloader(args.data_dir, batch_size=4, modality_grouping=args.grouping)
