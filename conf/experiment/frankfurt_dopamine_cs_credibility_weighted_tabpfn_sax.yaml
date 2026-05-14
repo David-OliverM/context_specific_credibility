@@ -1,0 +1,137 @@
+# AUTO-GENERATED — do not hand-edit.
+#
+# Source: paper/scripts/generate_tabpfn_sax_configs.py
+# CSV:    code/conf/grouping/dopamine_circuit_v2.csv
+#
+# Re-run the generator after any CSV change:
+#   cd paper && ../code/.venv/bin/python scripts/generate_tabpfn_sax_configs.py
+#
+# Each encoder is a F1 TabPFNSAXEncoder (see code/models/predictor.py).  The
+# learnable projector embeds SAX-tokenised ROI time-series into a 64-dim h_i;
+# the frozen TabPFN provides class probabilities p_i (consumed separately by
+# the C²MF head via predict_proba(); not wired here in F1.3).
+#
+# roi_indices below are the 0-based positions into the 132-ROI Frankfurt
+# atlas, filtered to k>=2 buckets (matches the dataloader's runtime filter).
+
+name: frankfurt/dopamine_cs_credibility_weighted_tabpfn_sax
+classification: true
+multilabel: false
+dataset:
+  name: frankfurt
+  path: ${data_dir}/neuro_data_UKF
+  args:
+    modality_grouping: dopamine
+    n_splits: 5
+    fold: 0
+    emit_timeseries: true
+  modalities: 4
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names:
+  - Amisulpride
+  - LDopa
+  - Placebo
+encoders:
+  dorsal_striatum:
+    type: TabPFNSAXEncoder
+    args:
+      roi_indices: [93, 94, 95, 96]
+      embed_dim: 64
+      sax_alphabet: 8
+      sax_word_size: 16
+      sax_strategy: quantile
+      n_classes: 3
+      tabpfn_device: cpu
+      random_state: 42
+  ventral_striatum:
+    type: TabPFNSAXEncoder
+    args:
+      roi_indices: [103, 104]
+      embed_dim: 64
+      sax_alphabet: 8
+      sax_word_size: 16
+      sax_strategy: quantile
+      n_classes: 3
+      tabpfn_device: cpu
+      random_state: 42
+  da_projection_cortex:
+    type: TabPFNSAXEncoder
+    args:
+      roi_indices: [4, 5, 6, 7, 48, 51, 52, 53, 54, 59, 60, 101, 102]
+      embed_dim: 64
+      sax_alphabet: 8
+      sax_word_size: 16
+      sax_strategy: quantile
+      n_classes: 3
+      tabpfn_device: cpu
+      random_state: 42
+  other:
+    type: TabPFNSAXEncoder
+    args:
+      roi_indices: [0, 1, 2, 3, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+        31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 49, 50, 55, 56, 57, 58, 61, 62, 63, 64, 65, 66,
+        67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 97, 98, 99,
+        100, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127,
+        128, 129, 130, 131]
+      embed_dim: 64
+      sax_alphabet: 8
+      sax_word_size: 16
+      sax_strategy: quantile
+      n_classes: 3
+      tabpfn_device: cpu
+      random_state: 42
+predictors:
+  dorsal_striatum:
+    type: Classifier
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  ventral_striatum:
+    type: Classifier
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  da_projection_cortex:
+    type: Classifier
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  other:
+    type: Classifier
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+head:
+  type: CredibilityWeightedMean
+  threshold_input: false
+  args:
+    num_features: ${experiment.dataset.modalities}
+    num_channels: 1
+    depth: 1
+    num_sums: 20
+    num_leaves: 20
+    num_repetitions: 20
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: Dirichlet
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: false
+    layer_type: einsum
+    dropout: 0.3
+    conditional_sum: true
+    sum_cond_fn_type: Classifier
+    sum_cond_fn_args:
+      in_dim: 256
+      n_layers: 3
+      n_hidden: 64
+      final_activation: None
+      out_dim: None
