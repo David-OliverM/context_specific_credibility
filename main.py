@@ -1,11 +1,24 @@
 #!/usr/bin/env python
-import os 
+import os
 import sys
-from packages import PACKAGE_DICT 
+from packages import PACKAGE_DICT
 for package in PACKAGE_DICT:
     print(f"Adding package: {package} to sys.path. Given path: {os.path.join('packages', PACKAGE_DICT[package])}")
     sys.path.append(os.path.join("packages", PACKAGE_DICT[package]))
 import omegaconf
+
+# torch 2.6+ defaults torch.load(weights_only=True), which rejects omegaconf
+# DictConfig / ListConfig objects pickled into Lightning checkpoints.  Re-add
+# them to the safe-globals allow-list so load_from_checkpoint(...) works.
+import torch.serialization
+torch.serialization.add_safe_globals([
+    omegaconf.DictConfig,
+    omegaconf.ListConfig,
+    omegaconf.dictconfig.DictConfig,
+    omegaconf.listconfig.ListConfig,
+    omegaconf.base.ContainerMetadata,
+    omegaconf.nodes.AnyNode,
+])
 import time
 import wandb
 from hydra.core.hydra_config import HydraConfig
