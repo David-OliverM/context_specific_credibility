@@ -1,0 +1,210 @@
+name: "frankfurt/yeo7_cs_credibility_weighted_dropout05"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  # Loader reads modality buckets from code/conf/grouping/yeo7_frankfurt_v2_symmetric.csv
+  # (MNI-overlay-verified, L=R-symmetric Yeo 2011 mapping). `path` is the
+  # directory with Amisulpride/, LDopa/, Placebo/, ROI_labels.txt.
+  path: "${data_dir}/neuro_data_UKF"
+  args:
+    modality_grouping: "yeo7"
+    n_splits: 5
+    fold: 0
+  # 9 modalities: 7 cortical Yeo networks + 2 auxiliary (subcortical / cerebellar).
+  modalities: 9
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+# In-dim values match yeo7_frankfurt_v2_symmetric.csv:
+#   VIS         k=18 -> in_dim=153    SOMMOT      k=18 -> in_dim=153
+#   DORSATTN    k=8  -> in_dim=28     VENTATTN    k=7  -> in_dim=21
+#   LIMBIC      k=16 -> in_dim=120    CONT        k=8  -> in_dim=28
+#   DEFAULT     k=16 -> in_dim=120    SUBCORTICAL k=15 -> in_dim=105
+#   CEREBELLAR  k=26 -> in_dim=325
+# Encoder hyper-params kept identical across modalities except n_hidden, which
+# is reduced for the smallest buckets (DORSATTN/VENTATTN/CONT) to avoid
+# trivially over-parameterising a 21-28-feature input.
+encoders:
+  VIS:
+    type: "MLPEncoder"
+    args:
+      in_dim: 153
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+
+  SOMMOT:
+    type: "MLPEncoder"
+    args:
+      in_dim: 153
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+
+  DORSATTN:
+    type: "MLPEncoder"
+    args:
+      in_dim: 28
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 64
+      dropout: 0.5
+
+  VENTATTN:
+    type: "MLPEncoder"
+    args:
+      in_dim: 21
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 64
+      dropout: 0.5
+
+  LIMBIC:
+    type: "MLPEncoder"
+    args:
+      in_dim: 120
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+
+  CONT:
+    type: "MLPEncoder"
+    args:
+      in_dim: 28
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 64
+      dropout: 0.5
+
+  DEFAULT:
+    type: "MLPEncoder"
+    args:
+      in_dim: 120
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+
+  SUBCORTICAL:
+    type: "MLPEncoder"
+    args:
+      in_dim: 105
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+
+  CEREBELLAR:
+    type: "MLPEncoder"
+    args:
+      in_dim: 325
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+
+
+predictors:
+  VIS:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  SOMMOT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  DORSATTN:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  VENTATTN:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  LIMBIC:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  CONT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  DEFAULT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  SUBCORTICAL:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  CEREBELLAR:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+head:
+  type: "CredibilityWeightedMean"
+  threshold_input: False
+  args:
+    num_features: ${experiment.dataset.modalities}
+    num_channels: 1
+    depth: 1
+    num_sums: 20
+    num_leaves: 20
+    num_repetitions: 20
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: 'Dirichlet'
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: False
+    layer_type: 'einsum'
+    dropout: 0.5
+    conditional_sum: True
+    sum_cond_fn_type: 'Classifier'
+    sum_cond_fn_args:
+      # context = concat of encoder embeddings = 9 * 64 = 576
+      in_dim: 576
+      n_layers: 3
+      n_hidden: 64
+      final_activation: None
+      out_dim: None
