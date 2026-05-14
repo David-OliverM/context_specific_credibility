@@ -7,18 +7,19 @@ for package in PACKAGE_DICT:
     sys.path.append(os.path.join("packages", PACKAGE_DICT[package]))
 import omegaconf
 
-# torch 2.6+ defaults torch.load(weights_only=True), which rejects omegaconf
-# DictConfig / ListConfig objects pickled into Lightning checkpoints.  Re-add
-# them to the safe-globals allow-list so load_from_checkpoint(...) works.
-import torch.serialization
-torch.serialization.add_safe_globals([
-    omegaconf.DictConfig,
-    omegaconf.ListConfig,
-    omegaconf.dictconfig.DictConfig,
-    omegaconf.listconfig.ListConfig,
-    omegaconf.base.ContainerMetadata,
-    omegaconf.nodes.AnyNode,
-])
+# torch 2.6+ defaults torch.load(weights_only=True), which rejects
+# omegaconf DictConfig + various other custom globals pickled into Lightning
+# checkpoints.  Adding safe-globals one-by-one is whack-a-mole (every
+# Lightning callback or torchmetrics object that pickles in needs its own
+# entry).  Since we only load checkpoints WE produced, monkeypatch
+# torch.load to default weights_only=False -- Lightning's recommended path
+# for trusted in-house checkpoints.
+import torch
+_orig_torch_load = torch.load
+def _torch_load_trust_self(*args, **kwargs):
+    kwargs.setdefault('weights_only', False)
+    return _orig_torch_load(*args, **kwargs)
+torch.load = _torch_load_trust_self
 import time
 import wandb
 from hydra.core.hydra_config import HydraConfig
