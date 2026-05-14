@@ -81,6 +81,7 @@ encoders:
       n_classes: 3
       tabpfn_device: cpu
       random_state: 42
+      ignore_pretraining_limits: true
 predictors:
   dorsal_striatum:
     type: Classifier

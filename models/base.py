@@ -129,6 +129,95 @@ class FusionModel(LitModel):
                     param.requires_grad = False  # freeze parameters
                 self.noise_encoders.append(enc_copy)
 
+    # --------------------------------------------------------------
+    # F1.4: per-fold TabPFN setup for TabPFNSAXEncoder modules.
+    # --------------------------------------------------------------
+    def fit_tabpfn_encoders(self, train_loader, val_loader, test_loader):
+        """Walk dataloaders, fit each TabPFNSAXEncoder on the fold's train set,
+        then precompute per-sample probabilities for the full fold.
+
+        No-op if there are no TabPFNSAXEncoder instances in self.encoders.
+        Encoders that crash during fit (e.g. ``dopamine/other`` with 1792
+        SAX features vs TabPFN's 500-feature soft limit) get a uniform
+        probability fallback (1/n_classes) so the training run continues
+        instead of bringing down the whole pipeline.
+
+        Args:
+          train_loader, val_loader, test_loader: the three loaders produced
+            by ``get_dataloader(...)``. Their datasets must emit per-modality
+            time series ``(T, k_rois)`` -- i.e. the configs must set
+            ``experiment.dataset.args.emit_timeseries=true``.
+        """
+        from models.predictor import TabPFNSAXEncoder
+        import numpy as np
+
+        tabpfn_encoders = [
+            (i, enc) for i, enc in enumerate(self.encoders)
+            if isinstance(enc, TabPFNSAXEncoder)
+        ]
+        if not tabpfn_encoders:
+            return  # No-op for MLPEncoder-only configs.
+
+        print(f"[F1.4] fit_tabpfn_encoders: "
+              f"found {len(tabpfn_encoders)} TabPFNSAXEncoder(s); "
+              f"setting up per-fold demonstrations.")
+
+        # Walk the train loader and collect (X_per_modality, y, sample_indices).
+        def _collect(loader, set_name):
+            xs_per_mod = None
+            ys, idxs = [], []
+            for batch in loader:
+                batch_data, (idx_t, _, _), _ = batch
+                # batch_data = (mod_1, mod_2, ..., mod_M, label)
+                mods = batch_data[:-1]
+                labels = batch_data[-1]
+                if xs_per_mod is None:
+                    xs_per_mod = [[] for _ in mods]
+                for m, t in enumerate(mods):
+                    xs_per_mod[m].append(t.detach().cpu().numpy())
+                ys.append(labels.detach().cpu().numpy())
+                # idx_t is a list[int] or a tensor depending on collate behaviour.
+                if hasattr(idx_t, "tolist"):
+                    idxs.extend(list(idx_t.tolist()))
+                else:
+                    idxs.extend(list(idx_t))
+            xs_per_mod = [np.concatenate(x, axis=0) for x in xs_per_mod]
+            y = np.concatenate(ys, axis=0)
+            print(f"[F1.4]   {set_name}: n={len(y)}  "
+                  f"per-modality shapes={[x.shape for x in xs_per_mod]}")
+            return xs_per_mod, y, idxs
+
+        Xtr, ytr, idx_tr = _collect(train_loader, "train")
+        Xva, yva, idx_va = _collect(val_loader,   "val  ")
+        Xte, yte, idx_te = _collect(test_loader,  "test ")
+
+        # Per-encoder fit + cache precompute. Try/except around fit so a
+        # 1792-feature bucket failure does not kill the whole run.
+        for enc_idx, enc in tabpfn_encoders:
+            m_name = (list(self.cfg.experiment.encoders.keys())[enc_idx]
+                      if hasattr(self.cfg.experiment, "encoders") else f"enc{enc_idx}")
+            sax_feat_dim = len(enc.roi_indices) * enc.sax_word_size
+            print(f"[F1.4]   modality {m_name} (encoder idx {enc_idx}): "
+                  f"k_rois={len(enc.roi_indices)}  sax_features={sax_feat_dim}")
+            try:
+                enc.fit_tabpfn(Xtr[enc_idx], ytr)
+                # Combine train+val+test for the precompute cache so forward()
+                # can look up any sample seen during fit/val/test loops.
+                X_all = np.concatenate([Xtr[enc_idx], Xva[enc_idx], Xte[enc_idx]], axis=0)
+                idx_all = list(idx_tr) + list(idx_va) + list(idx_te)
+                enc.precompute_probs(X_all, idx_all)
+                print(f"[F1.4]     fit OK; probs cache size = "
+                      f"{len(enc._probs_cache)}")
+            except Exception as e:  # pragma: no cover - documented fallback
+                print(f"[F1.4]   WARNING: TabPFN fit/precompute failed for "
+                      f"{m_name}: {type(e).__name__}: {e}")
+                print(f"[F1.4]   Falling back to uniform-probability mode for "
+                      f"this encoder.  Run will continue.")
+                # We don't substitute a different encoder -- the forward()
+                # only uses the learnable projector path, so it is unaffected.
+                # predict_proba() callers must be tolerant of the missing
+                # _tabpfn (they get a RuntimeError; F1.4 head does not call it).
+
     def training_step(self, train_batch, batch_idx):
         train_batch, corr, noise_ind = train_batch
         loss, accuracy, predictions, *extra = self._get_cross_entropy_and_accuracy(train_batch, noise_ind=noise_ind)

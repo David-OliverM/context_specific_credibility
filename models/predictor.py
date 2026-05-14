@@ -195,6 +195,7 @@ class TabPFNSAXEncoder(torch.nn.Module):
         tabpfn_device: str = "cpu",
         freeze_params: bool = False,
         random_state: int = 42,
+        ignore_pretraining_limits: bool = False,
         **_ignored,
     ):
         super().__init__()
@@ -221,6 +222,13 @@ class TabPFNSAXEncoder(torch.nn.Module):
         self.n_classes = int(n_classes)
         self.tabpfn_device = str(tabpfn_device)
         self.random_state = int(random_state)
+        # F1.4: allow large-feature inputs (e.g. dopamine/other has 1792 SAX
+        # features vs TabPFN's official 500 limit). When True, TabPFN logs a
+        # warning instead of raising. Methodologically: TabPFN's pretraining
+        # may not generalise as cleanly to feature counts well above its
+        # synthetic-training regime, so we treat any >500 result with extra
+        # scepticism in the Post-Doc analysis.
+        self.ignore_pretraining_limits = bool(ignore_pretraining_limits)
 
         # Learnable projector: concatenated SAX tokens (k_rois * word_size, as
         # float-cast integer ids) -> embed_dim.  This is the only trainable
@@ -321,16 +329,28 @@ class TabPFNSAXEncoder(torch.nn.Module):
 
         if X_train_full_ts.ndim != 3:
             raise ValueError(
-                f"X_train_full_ts must be (n, T, n_total_rois); got "
+                f"X_train_full_ts must be (n, T, n_rois); got "
                 f"{X_train_full_ts.shape}"
             )
-        ts_mod = X_train_full_ts[:, :, self.roi_indices]
+        # Accept either pre-sliced (n, T, k_rois) or full atlas (n, T, 132).
+        if X_train_full_ts.shape[-1] == len(self.roi_indices):
+            ts_mod = X_train_full_ts
+        elif X_train_full_ts.shape[-1] >= max(self.roi_indices) + 1:
+            ts_mod = X_train_full_ts[:, :, self.roi_indices]
+        else:
+            raise ValueError(
+                f"Expected last-dim {len(self.roi_indices)} or full atlas "
+                f"(>= {max(self.roi_indices) + 1}); got {X_train_full_ts.shape[-1]}"
+            )
         feats = self._sax_encode_batch(ts_mod).astype(np.float32)
 
-        self._tabpfn = TabPFNClassifier(
+        tabpfn_kwargs = dict(
             device=self.tabpfn_device,
             random_state=self.random_state,
         )
+        if self.ignore_pretraining_limits:
+            tabpfn_kwargs["ignore_pretraining_limits"] = True
+        self._tabpfn = TabPFNClassifier(**tabpfn_kwargs)
         self._tabpfn.fit(feats, np.asarray(y_train).astype(np.int64))
         # Clear stale per-fold cache from previous fits.
         self._probs_cache = {}
@@ -359,7 +379,16 @@ class TabPFNSAXEncoder(torch.nn.Module):
             raise RuntimeError(
                 "precompute_probs requires fit_tabpfn first."
             )
-        ts_mod = X_all_full_ts[:, :, self.roi_indices]
+        # Accept either pre-sliced (n, T, k_rois) or full atlas (n, T, 132).
+        if X_all_full_ts.shape[-1] == len(self.roi_indices):
+            ts_mod = X_all_full_ts
+        elif X_all_full_ts.shape[-1] >= max(self.roi_indices) + 1:
+            ts_mod = X_all_full_ts[:, :, self.roi_indices]
+        else:
+            raise ValueError(
+                f"Expected last-dim {len(self.roi_indices)} or full atlas "
+                f"(>= {max(self.roi_indices) + 1}); got {X_all_full_ts.shape[-1]}"
+            )
         feats = self._sax_encode_batch(ts_mod).astype(np.float32)
         with torch.no_grad():
             probs = self._tabpfn.predict_proba(feats)
