@@ -311,31 +311,58 @@ def _build_modality_features(ts: np.ndarray, modalities: dict[str, list[int]]) -
 # ---------------------------------------------------------------------------
 
 class FrankfurtFCDataset(Dataset):
-    """In-memory FC-feature dataset (small enough that this is fine: 135 scans)."""
+    """In-memory per-modality dataset for the Frankfurt fMRI task.
+
+    Two output modes (selected at construction time):
+
+    * ``emit_timeseries=False`` (default, used by the MLPEncoder pipeline):
+      per modality returns the within-modality FC upper-triangular vector of
+      shape ``(k*(k-1)/2,)``.  This is the path used by every config that has
+      been on the SoT baseline tables (v1 50-run, E2 dropout05, E3 wd1e-2,
+      etc.) — code-identical to the pre-F1.2 behaviour.
+
+    * ``emit_timeseries=True`` (used by the F1 TabPFNSAXEncoder pipeline):
+      per modality returns the raw ROI time-series slice of shape
+      ``(N_TIMESTEPS, k_rois)``.  Memory footprint ~19 MB for the full
+      135-scan cache.
+
+    Both modes share the same triple-of-tuples ``__getitem__`` shape so the
+    downstream FusionModel / training loop can stay agnostic; only the
+    per-modality tensor content changes.
+    """
 
     def __init__(
         self,
         items: list[tuple[Path, str, int]],
         modalities: dict[str, list[int]],
         modality_order: list[str],
+        emit_timeseries: bool = False,
     ):
         self.items = items
         self.modalities = modalities
         self.modality_order = modality_order
+        self.emit_timeseries = bool(emit_timeseries)
+        # Cache stores per-modality numpy arrays (FC-vec OR (T, k_rois) slice).
         self.cache: list[tuple[list[np.ndarray], int, int]] = []
         for p, cond, subj in items:
-            ts = _load_timeseries(p)
-            feats_by_mod = _build_modality_features(ts, modalities)
-            feats = [feats_by_mod[m] for m in modality_order]
+            ts = _load_timeseries(p)                       # (T, 132)
+            if self.emit_timeseries:
+                per_mod = [
+                    ts[:, modalities[m]].astype(np.float32)
+                    for m in modality_order
+                ]
+            else:
+                feats_by_mod = _build_modality_features(ts, modalities)
+                per_mod = [feats_by_mod[m] for m in modality_order]
             label = LABEL_MAP[cond]
-            self.cache.append((feats, label, subj))
+            self.cache.append((per_mod, label, subj))
 
     def __len__(self) -> int:
         return len(self.cache)
 
     def __getitem__(self, idx: int):
-        feats, label, _subj = self.cache[idx]
-        feat_tensors = [torch.from_numpy(f).float() for f in feats]
+        per_mod, label, _subj = self.cache[idx]
+        feat_tensors = [torch.from_numpy(f).float() for f in per_mod]
         # noise masks: zeros, same shape as features (used by frozen
         # noise_encoders in models/base.py FusionModel).
         noise_masks = tuple(torch.zeros_like(t) for t in feat_tensors)
@@ -402,14 +429,20 @@ def get_dataloader(
     modality_grouping: str = "anatomical",
     n_splits: int = 5,
     fold: int = 0,
+    emit_timeseries: bool = False,
     **kwargs,
 ):
     """Return (train_loader, val_loader, test_loader) for Frankfurt fMRI.
 
     Args:
       data_dir: path containing Amisulpride/, LDopa/, Placebo/, ROI_labels.txt.
-      modality_grouping: 'anatomical' | 'dopamine' | 'yeo7' (yeo7 is a STUB).
+      modality_grouping: 'anatomical' | 'dopamine' | 'yeo7'.
       n_splits, fold: subject-wise GroupKFold params.
+      emit_timeseries: if True, per-modality output becomes the raw ROI
+        time-series slice (shape ``(N_TIMESTEPS, k_rois)`` per sample);
+        if False (default), output is the FC upper-triangular feature vector
+        (shape ``(k*(k-1)/2,)``).  TabPFNSAXEncoder uses ``True``; the
+        existing MLPEncoder pipeline uses ``False``.
     """
     data_path = Path(data_dir)
     if not data_path.exists():
@@ -441,9 +474,21 @@ def get_dataloader(
     print(f"[frankfurt] split (fold {fold}/{n_splits}): "
           f"train={len(train_items)}  val={len(val_items)}  test={len(test_items)}")
 
-    train_set = FrankfurtFCDataset(train_items, modalities, modality_order)
-    val_set = FrankfurtFCDataset(val_items, modalities, modality_order)
-    test_set = FrankfurtFCDataset(test_items, modalities, modality_order)
+    train_set = FrankfurtFCDataset(
+        train_items, modalities, modality_order,
+        emit_timeseries=emit_timeseries,
+    )
+    val_set = FrankfurtFCDataset(
+        val_items, modalities, modality_order,
+        emit_timeseries=emit_timeseries,
+    )
+    test_set = FrankfurtFCDataset(
+        test_items, modalities, modality_order,
+        emit_timeseries=emit_timeseries,
+    )
+    if emit_timeseries:
+        print(f"[frankfurt] emit_timeseries=True  -> per-modality outputs are "
+              f"(T={N_TIMESTEPS}, k_rois) ROI time-series slices.")
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
     val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
@@ -456,10 +501,18 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("--data_dir", default=os.path.expanduser("~/dev/research-C2MF/paper/neuro_data_UKF"))
     p.add_argument("--grouping", default="anatomical")
+    p.add_argument("--emit_timeseries", action="store_true",
+                   help="F1.2: emit per-modality (T, k_rois) time-series "
+                        "instead of FC features.")
     args = p.parse_args()
-    tl, vl, te = get_dataloader(args.data_dir, batch_size=4, modality_grouping=args.grouping)
+    tl, vl, te = get_dataloader(
+        args.data_dir,
+        batch_size=4,
+        modality_grouping=args.grouping,
+        emit_timeseries=args.emit_timeseries,
+    )
     for batch_data, _, _ in tl:
         for i, t in enumerate(batch_data[:-1]):
-            print(f"mod{i}: {t.shape}")
-        print(f"label: {batch_data[-1].shape}, sample={batch_data[-1].tolist()}")
+            print(f"mod{i}: {tuple(t.shape)}  dtype={t.dtype}")
+        print(f"label: {tuple(batch_data[-1].shape)}, sample={batch_data[-1].tolist()}")
         break
