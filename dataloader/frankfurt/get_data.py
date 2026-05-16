@@ -248,9 +248,25 @@ def _dopamine_grouping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
     )
 
 
+def _dopamine_grouping_M3(roi_labels: Sequence[str]) -> dict[str, list[int]]:
+    """Dopamine grouping with the catch-all `other` bucket (112 ROIs) dropped.
+
+    Diagnostic variant for F1.4c [[Decision Log - F1.5-F1.6 Sequence Inversion]]:
+    removes the 1792-SAX-feature `other` bucket to test whether it is the
+    primary overfit driver in F1.4b.  M=3 effective modalities:
+    dorsal_striatum, ventral_striatum, da_projection_cortex.
+    """
+    out = _dopamine_grouping(roi_labels)
+    out.pop("other", None)
+    print("[frankfurt] dopamine_M3 grouping: dropped `other` bucket "
+          f"({list(out.keys())} remaining)")
+    return out
+
+
 GROUPING_FNS = {
     "anatomical": _anatomical_grouping,
     "dopamine": _dopamine_grouping,
+    "dopamine_M3": _dopamine_grouping_M3,
     "yeo7": _yeo7_mapping,
 }
 
