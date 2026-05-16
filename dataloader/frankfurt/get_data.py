@@ -393,10 +393,19 @@ class FrankfurtFCDataset(Dataset):
 # Splitting (subject-wise GroupKFold)
 # ---------------------------------------------------------------------------
 
-def _subject_kfold(items: list[tuple[Path, str, int]], n_splits: int, fold: int):
-    """Return (train_items, val_items, test_items).  Val and test split the
-    held-out fold's subjects 50/50 (small data, so we trade test-size for
-    val-set existence)."""
+def _subject_kfold(items: list[tuple[Path, str, int]], n_splits: int, fold: int,
+                   inner_fold: int | None = None, inner_n_splits: int = 3):
+    """Return (train_items, val_items, test_items).
+
+    Default (outer split, ``inner_fold is None``): the outer fold k of n_splits
+    yields train + (val/test from the held-out fold subjects, 50/50).
+
+    Inner-CV mode (``inner_fold`` set): for F1.5'-β multi-fold HP tuning.
+    Within the OUTER train set, re-do subject-wise GroupKFold to split into
+    inner-train + inner-val.  The OUTER test set stays unchanged so the F1.5'-β
+    Optuna search never sees the outer test.  Returned tuple is then
+    (inner_train_items, inner_val_items, outer_test_items).
+    """
     subjects = np.array([s for _, _, s in items])
     indices = np.arange(len(items))
     # GroupKFold deterministic ordering -> picks the fold-th split.
@@ -411,10 +420,30 @@ def _subject_kfold(items: list[tuple[Path, str, int]], n_splits: int, fold: int)
     test_subjects = set(holdout_subjects[half:].tolist())
     val_idx = [i for i in holdout_idx if subjects[i] in val_subjects]
     test_idx = [i for i in holdout_idx if subjects[i] in test_subjects]
-    train_items = [items[i] for i in train_idx]
-    val_items = [items[i] for i in val_idx]
-    test_items = [items[i] for i in test_idx]
-    return train_items, val_items, test_items
+    train_items_outer = [items[i] for i in train_idx]
+    val_items_outer = [items[i] for i in val_idx]
+    test_items_outer = [items[i] for i in test_idx]
+
+    if inner_fold is None:
+        return train_items_outer, val_items_outer, test_items_outer
+
+    # Inner-CV mode: re-fold the outer-train into inner-train + inner-val.
+    if not (0 <= inner_fold < inner_n_splits):
+        raise ValueError(
+            f"inner_fold must be in [0, {inner_n_splits}); got {inner_fold}"
+        )
+    inner_subjects = np.array([s for _, _, s in train_items_outer])
+    inner_indices = np.arange(len(train_items_outer))
+    inner_gkf = GroupKFold(n_splits=inner_n_splits)
+    inner_splits = list(inner_gkf.split(inner_indices, groups=inner_subjects))
+    inner_train_idx, inner_val_idx = inner_splits[inner_fold]
+    inner_train_items = [train_items_outer[i] for i in inner_train_idx]
+    inner_val_items = [train_items_outer[i] for i in inner_val_idx]
+    print(f"[frankfurt] inner-CV: outer fold {fold}/{n_splits}, "
+          f"inner fold {inner_fold}/{inner_n_splits} -> "
+          f"inner_train={len(inner_train_items)} inner_val={len(inner_val_items)} "
+          f"test={len(test_items_outer)} (unchanged outer)")
+    return inner_train_items, inner_val_items, test_items_outer
 
 
 # ---------------------------------------------------------------------------
@@ -446,6 +475,8 @@ def get_dataloader(
     n_splits: int = 5,
     fold: int = 0,
     emit_timeseries: bool = False,
+    inner_fold: int | None = None,
+    inner_n_splits: int = 3,
     **kwargs,
 ):
     """Return (train_loader, val_loader, test_loader) for Frankfurt fMRI.
@@ -486,9 +517,18 @@ def get_dataloader(
     print(f"[frankfurt] loaded {len(items)} CSVs from {data_path}")
     assert len(items) == 135, f"expected 135 scans, got {len(items)}"
 
-    train_items, val_items, test_items = _subject_kfold(items, n_splits, fold)
-    print(f"[frankfurt] split (fold {fold}/{n_splits}): "
-          f"train={len(train_items)}  val={len(val_items)}  test={len(test_items)}")
+    train_items, val_items, test_items = _subject_kfold(
+        items, n_splits, fold,
+        inner_fold=inner_fold, inner_n_splits=inner_n_splits,
+    )
+    if inner_fold is None:
+        print(f"[frankfurt] split (fold {fold}/{n_splits}): "
+              f"train={len(train_items)}  val={len(val_items)}  test={len(test_items)}")
+    else:
+        print(f"[frankfurt] inner-CV split: outer fold {fold}/{n_splits}, "
+              f"inner fold {inner_fold}/{inner_n_splits}: "
+              f"inner_train={len(train_items)}  inner_val={len(val_items)}  "
+              f"test={len(test_items)} (outer test, untouched)")
 
     train_set = FrankfurtFCDataset(
         train_items, modalities, modality_order,
