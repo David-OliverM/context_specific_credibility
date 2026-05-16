@@ -251,6 +251,13 @@ class TabPFNSAXEncoder(torch.nn.Module):
         # autograd graph and outside `self.parameters()`.
         self._tabpfn = None
         self._probs_cache: dict[int, np.ndarray] = {}
+        # F1.5'-β optimization: cache the SAX-encoded features per fold so
+        # forward() does a lookup instead of re-running pyts on every batch.
+        # Keyed by both global sample index AND by content-hash of the input
+        # time-series slice (hash fallback covers the case where forward()
+        # is called without sample_indices in the FusionModel pathway).
+        self._sax_cache_by_idx: dict[int, np.ndarray] = {}
+        self._sax_cache_by_hash: dict[int, np.ndarray] = {}
 
     # -----------------------------------------------------------------
     # SAX encoding helper
@@ -396,6 +403,21 @@ class TabPFNSAXEncoder(torch.nn.Module):
             int(idx): probs[row].astype(np.float32)
             for row, idx in enumerate(sample_indices)
         }
+        # F1.5'-β optimization: also cache the SAX features themselves so
+        # forward() can skip the per-batch SAX recompute (the CPU bottleneck
+        # that left the GPU at 0% utilisation in F1.5'-α and F1.5'-β-v0).
+        # Two cache views:
+        #   (a) by sample_index   -- used when forward() gets sample_indices kw
+        #   (b) by content-hash   -- used in the existing FusionModel pathway
+        #                            where sample_indices does not flow through
+        self._sax_cache_by_idx = {
+            int(idx): feats[row]
+            for row, idx in enumerate(sample_indices)
+        }
+        self._sax_cache_by_hash = {
+            int(hash(ts_mod[row].tobytes())): feats[row]
+            for row in range(ts_mod.shape[0])
+        }
 
     # -----------------------------------------------------------------
     # Inference
@@ -500,9 +522,54 @@ class TabPFNSAXEncoder(torch.nn.Module):
                     f"got {x_np.shape[-1]}"
                 )
 
-        feats = self._sax_encode_batch(x_np).astype(np.float32)  # (B, feat_dim)
+        # F1.5'-β cache-fast-path: if precompute_probs has been called and the
+        # input matches a cached sample (by hash OR by sample_indices), skip
+        # the per-batch SAX recompute (saves the CPU bottleneck that left the
+        # GPU idle in F1.5'-α/β-v0).
+        feats = self._lookup_or_compute_sax(x_np, sample_indices)
         feats_t = torch.from_numpy(feats).to(
             next(self.projector.parameters()).device
         )
         h = self.projector(feats_t)  # (B, embed_dim)
         return h
+
+    def _lookup_or_compute_sax(
+        self,
+        x_np: np.ndarray,
+        sample_indices=None,
+    ) -> np.ndarray:
+        """Cache-aware SAX retrieval.  Returns (B, feat_dim) float32."""
+        B = x_np.shape[0]
+        # Fast path 1: sample-index lookup.
+        if sample_indices is not None and len(self._sax_cache_by_idx) > 0:
+            try:
+                rows = [
+                    self._sax_cache_by_idx[
+                        int(i.item() if hasattr(i, "item") else i)
+                    ]
+                    for i in sample_indices
+                ]
+                return np.stack(rows, axis=0).astype(np.float32)
+            except KeyError:
+                pass  # fall through to hash-path
+        # Fast path 2: content-hash lookup (FusionModel pathway).
+        if len(self._sax_cache_by_hash) > 0:
+            rows = []
+            misses = []
+            for i in range(B):
+                h = int(hash(x_np[i].tobytes()))
+                if h in self._sax_cache_by_hash:
+                    rows.append(self._sax_cache_by_hash[h])
+                else:
+                    misses.append(i)
+                    rows.append(None)
+            if not misses:
+                return np.stack(rows, axis=0).astype(np.float32)
+            # Partial-miss: compute the missing rows.
+            miss_feats = self._sax_encode_batch(x_np[misses]).astype(np.float32)
+            for j, i in enumerate(misses):
+                rows[i] = miss_feats[j]
+                self._sax_cache_by_hash[int(hash(x_np[i].tobytes()))] = miss_feats[j]
+            return np.stack(rows, axis=0).astype(np.float32)
+        # Fallback: full SAX recompute.
+        return self._sax_encode_batch(x_np).astype(np.float32)
