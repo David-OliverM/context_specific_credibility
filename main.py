@@ -185,8 +185,19 @@ def main(cfg: DictConfig):
         resume_path = cfg.get('resume_ckpt', None) if hasattr(cfg, 'get') else None
         trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=resume_path or None)
         model = model_class.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
-        
-       
+        # F1.8: load_from_checkpoint does NOT restore TabPFN internals
+        # (`_tabpfn`, `_probs_cache_by_hash`) because TabPFNClassifier is not a
+        # torch.nn.Module and is intentionally excluded from state_dict.
+        # Re-fit TabPFN encoders on the same fold so test-step's
+        # `predict_proba` lookups succeed.
+        if hasattr(model, "fit_tabpfn_encoders"):
+            logger.info(
+                "F1.8: re-fitting TabPFN-SAX encoders after best-checkpoint "
+                f"reload for fold {cfg.experiment.dataset.args.fold}..."
+            )
+            model.fit_tabpfn_encoders(train_loader, val_loader, test_loader)
+
+
 
     logger.info("Evaluating model...")
     trainer.test(model=model, dataloaders=[test_loader], verbose=True)
