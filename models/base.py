@@ -366,7 +366,14 @@ class LateFusionClassifier(FusionModel):
         """
         # Sanity check that there are #modalities + 1(target) variables in input
         assert len(batch) == self.num_modalities + 1
-        
+
+        # F1.8: lazy-import here to avoid wildcard-import ambiguity at module
+        # load time; TabPFNSAXEncoder is the only encoder class for which the
+        # unimodal-prediction comes from frozen TabPFN.predict_proba instead
+        # of the learnable Classifier-MLP predictor (Variant iii per
+        # predictor.py:153-155 and [[Discovery - TabPFN Idle in Forward]]).
+        from models.predictor import TabPFNSAXEncoder
+
         data, labels = batch[:-1], batch[-1]
         loss, embeddings, predictions = 0.0,  [], []
         noise_encoders = self.noise_encoders
@@ -379,16 +386,38 @@ class LateFusionClassifier(FusionModel):
                     embeddings += [encoder(unimodal_data)]
                     corruptions += [noise_encoder(noise)]
                     unimodal_prediction = predictor(embeddings[-1])
-            
+
             else:
                 if(encoder is not None):
                     embeddings += [encoder(unimodal_data)]
                 else:
                     embeddings += [unimodal_data]
 
-                corruptions += [noise_encoder(noise)]    
-                unimodal_prediction = predictor(embeddings[-1])
-            
+                corruptions += [noise_encoder(noise)]
+                # F1.8: Variant iii -- if the encoder is TabPFNSAXEncoder, the
+                # unimodal-prediction p_i comes directly from frozen TabPFN's
+                # predict_proba (content-hash cache lookup); the learnable
+                # Classifier-MLP predictor is bypassed.  For other encoders
+                # (e.g.  MLPEncoder + Classifier), behaviour is unchanged.
+                if isinstance(encoder, TabPFNSAXEncoder):
+                    with torch.no_grad():
+                        tabpfn_probs = encoder.predict_proba(
+                            time_series_batch=unimodal_data,
+                        )
+                    # Move to the same device as the learnable embedding so the
+                    # downstream head can mix them in one device.  Clamp to
+                    # avoid log(0) downstream (TabPFN can return very small
+                    # but non-zero probs).
+                    unimodal_prediction = tabpfn_probs.to(
+                        embeddings[-1].device
+                    ).clamp(min=1e-8)
+                    # Renormalise after clamp so the row still sums to 1.
+                    unimodal_prediction = unimodal_prediction / unimodal_prediction.sum(
+                        dim=-1, keepdim=True
+                    )
+                else:
+                    unimodal_prediction = predictor(embeddings[-1])
+
 
             if(self.cfg.experiment.head.threshold_input):
                 predictions += [unimodal_prediction.argmax(dim=-1).unsqueeze(1)]

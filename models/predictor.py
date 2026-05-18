@@ -250,7 +250,19 @@ class TabPFNSAXEncoder(torch.nn.Module):
         # TabPFNClassifier as a submodule — it must stay outside the
         # autograd graph and outside `self.parameters()`.
         self._tabpfn = None
+        # F1.8: TWO probs-caches, keyed differently:
+        #   _probs_cache       — keyed by sample-idx (legacy; collides at
+        #                        train/val/test boundaries because
+        #                        FrankfurtFCDataset returns dataset-local idx,
+        #                        so train[0], val[0], test[0] all map to key=0
+        #                        and overwrite each other).
+        #   _probs_cache_by_hash — keyed by content-hash of the raw time
+        #                          series; collision-free as long as no two
+        #                          samples have identical floating-point
+        #                          tensor bytes (essentially never).  This is
+        #                          the safe path for the FusionModel forward.
         self._probs_cache: dict[int, np.ndarray] = {}
+        self._probs_cache_by_hash: dict[int, np.ndarray] = {}
         # F1.5'-β optimization: cache the SAX-encoded features per fold so
         # forward() does a lookup instead of re-running pyts on every batch.
         # Keyed by both global sample index AND by content-hash of the input
@@ -359,8 +371,9 @@ class TabPFNSAXEncoder(torch.nn.Module):
             tabpfn_kwargs["ignore_pretraining_limits"] = True
         self._tabpfn = TabPFNClassifier(**tabpfn_kwargs)
         self._tabpfn.fit(feats, np.asarray(y_train).astype(np.int64))
-        # Clear stale per-fold cache from previous fits.
+        # Clear stale per-fold caches from previous fits.
         self._probs_cache = {}
+        self._probs_cache_by_hash = {}
 
     def precompute_probs(
         self,
@@ -403,6 +416,15 @@ class TabPFNSAXEncoder(torch.nn.Module):
             int(idx): probs[row].astype(np.float32)
             for row, idx in enumerate(sample_indices)
         }
+        # F1.8: collision-free probs cache keyed by content-hash of the raw
+        # time-series slice. _probs_cache (by sample-idx) collides at the
+        # train/val/test boundary because FrankfurtFCDataset returns dataset-
+        # local idx (train[0], val[0], test[0] all = key 0). The hash cache
+        # is the path used by FusionModel forward.
+        self._probs_cache_by_hash = {
+            int(hash(ts_mod[row].tobytes())): probs[row].astype(np.float32)
+            for row in range(ts_mod.shape[0])
+        }
         # F1.5'-β optimization: also cache the SAX features themselves so
         # forward() can skip the per-batch SAX recompute (the CPU bottleneck
         # that left the GPU at 0% utilisation in F1.5'-α and F1.5'-β-v0).
@@ -429,9 +451,13 @@ class TabPFNSAXEncoder(torch.nn.Module):
     ) -> torch.Tensor:
         """TabPFN class probabilities for a batch of samples.
 
-        Two paths:
-          (a) If `sample_indices` are given AND the cache is populated, lookup.
-          (b) Else: live TabPFN inference on `time_series_batch`.
+        Three lookup paths, in preference order:
+          (a) Content-hash lookup against `_probs_cache_by_hash` (preferred;
+              collision-free; needs `time_series_batch`).  Used by the F1.8
+              FusionModel forward path.
+          (b) Sample-idx lookup against `_probs_cache` (legacy; may collide
+              when train/val/test return overlapping dataset-local indices).
+          (c) Live TabPFN inference on `time_series_batch` (slow fallback).
 
         Returns
         -------
@@ -444,6 +470,38 @@ class TabPFNSAXEncoder(torch.nn.Module):
                 "in-context demonstrations yet."
             )
 
+        # Path (a): content-hash lookup -- preferred, collision-free.
+        if time_series_batch is not None and len(self._probs_cache_by_hash) > 0:
+            if isinstance(time_series_batch, torch.Tensor):
+                ts_np = time_series_batch.detach().cpu().numpy()
+            else:
+                ts_np = np.asarray(time_series_batch)
+            if ts_np.shape[-1] != len(self.roi_indices):
+                ts_np = ts_np[:, :, self.roi_indices]
+            rows = []
+            misses = []
+            for i in range(ts_np.shape[0]):
+                h = int(hash(ts_np[i].tobytes()))
+                if h in self._probs_cache_by_hash:
+                    rows.append(self._probs_cache_by_hash[h])
+                else:
+                    misses.append(i)
+                    rows.append(None)
+            if not misses:
+                return torch.from_numpy(np.stack(rows, axis=0).astype(np.float32))
+            # Partial-miss: compute the missing rows via live TabPFN inference
+            # and warm the cache.  This is the safety net for samples seen
+            # outside the precompute pass.
+            miss_feats = self._sax_encode_batch(ts_np[misses]).astype(np.float32)
+            with torch.no_grad():
+                miss_probs = self._tabpfn.predict_proba(miss_feats)
+            for j, i in enumerate(misses):
+                row = miss_probs[j].astype(np.float32)
+                rows[i] = row
+                self._probs_cache_by_hash[int(hash(ts_np[i].tobytes()))] = row
+            return torch.from_numpy(np.stack(rows, axis=0).astype(np.float32))
+
+        # Path (b): sample-idx lookup -- legacy, may collide.
         if sample_indices is not None and len(self._probs_cache) > 0:
             rows = []
             for idx in sample_indices:
@@ -457,17 +515,16 @@ class TabPFNSAXEncoder(torch.nn.Module):
             probs_np = np.stack(rows, axis=0).astype(np.float32)
             return torch.from_numpy(probs_np)
 
-        # Live inference fallback (slow; only for debug / sanity).
+        # Path (c): live inference fallback (slow; only for debug / sanity).
         if time_series_batch is None:
             raise ValueError(
-                "predict_proba needs either sample_indices (with cache) or "
-                "a time_series_batch for live inference."
+                "predict_proba needs either time_series_batch or "
+                "sample_indices with a populated cache."
             )
         if isinstance(time_series_batch, torch.Tensor):
             ts_np = time_series_batch.detach().cpu().numpy()
         else:
             ts_np = np.asarray(time_series_batch)
-        # Caller may pass either (B, T, 132) full or (B, T, k_rois) sliced.
         if ts_np.shape[-1] != len(self.roi_indices):
             ts_np = ts_np[:, :, self.roi_indices]
         feats = self._sax_encode_batch(ts_np).astype(np.float32)
