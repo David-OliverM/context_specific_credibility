@@ -184,6 +184,12 @@ def main(cfg: DictConfig):
         resume_path = cfg.get('resume_ckpt', None) if hasattr(cfg, 'get') else None
         trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=resume_path or None)
         model = model_class.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
+        # load_from_checkpoint does NOT restore TabPFN internals (the
+        # TabPFNClassifier sits outside state_dict by design). Re-fit
+        # demos + caches so the test-step's predict_proba lookups
+        # succeed. No-op when no TabPFNSAXEncoder is present.
+        if hasattr(model, "fit_tabpfn_encoders"):
+            model.fit_tabpfn_encoders(train_loader, val_loader, test_loader)
 
     logger.info("Evaluating model...")
     trainer.test(model=model, dataloaders=[test_loader], verbose=True)

@@ -1,0 +1,74 @@
+name: "frankfurt/dopamine_M3_sanity_noisy_or_mlpenc"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}/neuro_data_UKF"
+  args:
+    modality_grouping: "dopamine_M3"
+    n_splits: 3
+    fold: 0
+  modalities: 3
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+encoders:
+  dorsal_striatum:
+    type: "MLPEncoder"
+    args:
+      in_dim: 6
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 64
+      dropout: 0.2
+
+  ventral_striatum:
+    type: "MLPEncoder"
+    args:
+      in_dim: 1
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 32
+      dropout: 0.2
+
+  da_projection_cortex:
+    type: "MLPEncoder"
+    args:
+      in_dim: 78
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.2
+
+predictors:
+  dorsal_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  ventral_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  da_projection_cortex:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+head:
+  type: "NoisyOR"
+  threshold_input: False
+  args:
+    normalize_dim: 1
+    multilabel: False
