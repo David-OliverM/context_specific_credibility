@@ -166,9 +166,17 @@ class FusionModel(LitModel):
 
                 
     def log_metrics(self, probs, targets, mode='Train/', **kwargs):
-        probs, targets = probs.detach().cpu(), targets.detach().cpu()
+        # Do not call self.metrics[name](probs, targets) and log the returned tensor:
+        # for AUROC / F1 / Precision / Recall, that gives a per-batch value that
+        # Lightning then averages with batch-size weights — which is mathematically
+        # wrong for ranking-based metrics (was off by ~30x in the upstream repo;
+        # see paper/outline/c2mf-reproduction-recipe.md §7.5 and thesis findings).
+        # Instead: .update() the accumulator each batch, log the Metric INSTANCE
+        # itself, and Lightning calls .compute() once at epoch end and .reset()
+        # automatically.
         for metric_name in self.metrics:
-            self.log(f"{mode}{metric_name}",self.metrics[metric_name](probs, targets),**kwargs)
+            self.metrics[metric_name].update(probs.detach(), targets.detach())
+            self.log(f"{mode}{metric_name}", self.metrics[metric_name], **kwargs)
         
     def _get_cross_entropy_and_accuracy(self, batch) -> Tuple[torch.Tensor, torch.Tensor]:
         raise NotImplementedError
