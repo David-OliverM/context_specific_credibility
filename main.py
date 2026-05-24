@@ -1,11 +1,25 @@
 #!/usr/bin/env python
-import os 
+import os
 import sys
-from packages import PACKAGE_DICT 
+from packages import PACKAGE_DICT
 for package in PACKAGE_DICT:
     print(f"Adding package: {package} to sys.path. Given path: {os.path.join('packages', PACKAGE_DICT[package])}")
     sys.path.append(os.path.join("packages", PACKAGE_DICT[package]))
 import omegaconf
+
+# torch 2.6+ defaults torch.load(weights_only=True), which rejects
+# omegaconf DictConfig + various other custom globals pickled into Lightning
+# checkpoints.  Adding safe-globals one-by-one is whack-a-mole (every
+# Lightning callback or torchmetrics object that pickles in needs its own
+# entry).  Since we only load checkpoints WE produced, monkeypatch
+# torch.load to default weights_only=False -- Lightning's recommended path
+# for trusted in-house checkpoints.
+import torch
+_orig_torch_load = torch.load
+def _torch_load_trust_self(*args, **kwargs):
+    kwargs.setdefault('weights_only', False)
+    return _orig_torch_load(*args, **kwargs)
+torch.load = _torch_load_trust_self
 import time
 import wandb
 from hydra.core.hydra_config import HydraConfig
@@ -45,11 +59,16 @@ def main(cfg: DictConfig):
     """
 
     import torch
-    
-    start_event = torch.cuda.Event(enable_timing=True)
-    end_event = torch.cuda.Event(enable_timing=True)
 
-    start_event.record()
+    if torch.cuda.is_available():
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+        start_event.record()
+    else:
+        start_event = None
+        end_event = None
+        import time as _time
+        _wall_start = _time.perf_counter()
     preprocess_cfg(cfg)
 
     # Get hydra config
@@ -152,8 +171,9 @@ def main(cfg: DictConfig):
     )
 
     if not cfg.load_and_eval:
-        # Fit model
-        trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader)
+        # Fit model — resume from cfg.resume_ckpt if set (optional config key)
+        resume_path = cfg.get('resume_ckpt', None) if hasattr(cfg, 'get') else None
+        trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=resume_path or None)
         model = model_class.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
         
        
@@ -168,14 +188,19 @@ def main(cfg: DictConfig):
     logger.info("Saving checkpoint: " + chpt_path)
     trainer.save_checkpoint(chpt_path)
 
-    end_event.record()
-    torch.cuda.synchronize()
-    time_elapsed = start_event.elapsed_time(end_event)
+    if torch.cuda.is_available() and end_event is not None:
+        end_event.record()
+        torch.cuda.synchronize()
+        time_elapsed = start_event.elapsed_time(end_event)
 
-    print(f"Time Elapsed: {time_elapsed} milliseconds")
-    print(f"Allocated memory: {torch.cuda.memory_allocated()} bytes")
-    print(f"Reserved memory: {torch.cuda.memory_reserved()} bytes")
-    print(f"Max Reserved memory: {torch.cuda.max_memory_reserved()} bytes")
+        print(f"Time Elapsed: {time_elapsed} milliseconds")
+        print(f"Allocated memory: {torch.cuda.memory_allocated()} bytes")
+        print(f"Reserved memory: {torch.cuda.memory_reserved()} bytes")
+        print(f"Max Reserved memory: {torch.cuda.max_memory_reserved()} bytes")
+    else:
+        import time as _time
+        time_elapsed = (_time.perf_counter() - _wall_start) * 1000
+        print(f"Time Elapsed (CPU/MPS wallclock): {time_elapsed:.1f} milliseconds")
 
 
 def preprocess_cfg(cfg: DictConfig):
