@@ -1,0 +1,62 @@
+name: "frankfurt/yeo7_sanity_weighted_mean_mlpenc"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}/neuro_data_UKF"
+  args:
+    modality_grouping: "yeo7"
+    n_splits: 3
+    fold: 0
+  modalities: 9
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+encoders:
+  VIS:
+    type: "MLPEncoder"
+    args: {in_dim: 153, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+  SOMMOT:
+    type: "MLPEncoder"
+    args: {in_dim: 153, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+  DORSATTN:
+    type: "MLPEncoder"
+    args: {in_dim: 28, embed_dim: 64, n_layers: 2, n_hidden: 64, dropout: 0.2}
+  VENTATTN:
+    type: "MLPEncoder"
+    args: {in_dim: 21, embed_dim: 64, n_layers: 2, n_hidden: 64, dropout: 0.2}
+  LIMBIC:
+    type: "MLPEncoder"
+    args: {in_dim: 120, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+  CONT:
+    type: "MLPEncoder"
+    args: {in_dim: 28, embed_dim: 64, n_layers: 2, n_hidden: 64, dropout: 0.2}
+  DEFAULT:
+    type: "MLPEncoder"
+    args: {in_dim: 120, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+  SUBCORTICAL:
+    type: "MLPEncoder"
+    args: {in_dim: 105, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+  CEREBELLAR:
+    type: "MLPEncoder"
+    args: {in_dim: 325, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+
+predictors:
+  VIS:        {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
+  SOMMOT:     {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
+  DORSATTN:   {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
+  VENTATTN:   {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
+  LIMBIC:     {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
+  CONT:       {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
+  DEFAULT:    {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
+  SUBCORTICAL:{type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
+  CEREBELLAR: {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
+
+head:
+  type: "WeightedMean"
+  threshold_input: False
+  args:
+    weight_dims: [1, 9, 1]
+    normalize_dim: 1
+    multilabel: False
