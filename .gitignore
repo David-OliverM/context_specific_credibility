@@ -7,6 +7,7 @@ __pycache__/
 *.so
 *.csv
 *.sh
+!docker/*.sh
 scripts/
 data/
 results/

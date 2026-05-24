@@ -78,19 +78,12 @@ multidict==6.0.4
 nest-asyncio==1.5.9
 networkx==3.2.1
 numba==0.63.1
-numpy==1.24.4
-nvidia-cublas-cu11==11.10.3.66
-nvidia-cuda-cupti-cu11==11.7.101
-nvidia-cuda-nvrtc-cu11==11.7.99
-nvidia-cuda-runtime-cu11==11.7.99
-nvidia-cudnn-cu11==8.5.0.96
-nvidia-cufft-cu11==10.9.0.58
-nvidia-curand-cu11==10.2.10.91
-nvidia-cusolver-cu11==11.4.0.1
-nvidia-cusparse-cu11==11.7.4.91
+numpy==1.26.4
+# NOTE 2026-05-15: bumped numpy 1.24.4 -> 1.26.4 because torch 2.5.x pulls
+# numpy>=1.26 transitively. Still <2.0 because scipy 1.11.4 is not numpy-2.x
+# compatible. If scipy is later bumped, numpy 2.x can come along.
+# nvidia-cu11 wheels removed: base image ships cu124 runtime now.
 nvidia-ml-py==12.535.133
-nvidia-nccl-cu11==2.14.3
-nvidia-nvtx-cu11==11.7.91
 oauthlib==3.2.2
 omegaconf==2.3.0
 opencv-python==4.7.0.72
@@ -146,14 +139,22 @@ text-unidecode==1.3
 threadpoolctl==3.2.0
 tifffile==2025.5.10
 timm==0.9.7
-torch==2.0.1
-torchaudio==2.0.2
+torch==2.5.1
+torchaudio==2.5.1
 torchmetrics==1.3.0.post0
-torchvision==0.15.2
+torchvision==0.20.1
 tornado==6.4
 tqdm==4.64.1
 traitlets==5.14.1
-triton==2.0.0
+triton==3.1.0
+# NOTE 2026-05-15: torch+torchaudio+torchvision bumped from 2.0.x to 2.5.1
+# (cu124 wheels) because V100 has compute capability 7.0 and torch 2.12+cu130
+# only ships kernels for CC >= 7.5. See vault/methods/F1 Tech-Debt §2.
+# triton bumped 2.0.0 -> 3.1.0 (matches torch 2.5).
+# F1.x Foundation-Model pipeline deps:
+tabpfn==2.2.1
+pyts==0.13.0
+optuna==4.8.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 tzdata==2023.4

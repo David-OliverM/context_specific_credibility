@@ -1,0 +1,46 @@
+# Keep the build context small — Docker copies all of these into the daemon
+# every build otherwise. Most are bind-mounted at run time anyway.
+
+.git
+.gitignore
+.venv
+venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache
+.pytest_cache
+.idea
+.vscode
+.DS_Store
+
+# Datasets + checkpoints — too big, bind-mount /data instead.
+trained_models/
+data/
+datasets/
+runs/
+outputs/
+multirun/
+wandb/
+calibration_plots/
+*.pth
+*.pt
+*.ckpt
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Documentation/non-runtime files
+*.md
+!README.md
+LICENSE
+notebooks/
+docs/
+
+# Misc local
+*.log
+*.zip
+*.tar.gz
