@@ -171,12 +171,19 @@ def main(cfg: DictConfig):
     )
 
     if not cfg.load_and_eval:
+        # TabPFNSAXEncoder needs a one-time fit per fold before training.
+        # No-op when no TabPFNSAXEncoder is present in self.encoders.
+        if hasattr(model, "fit_tabpfn_encoders"):
+            logger.info(
+                "Fitting TabPFN-SAX encoders for fold "
+                f"{cfg.experiment.dataset.args.fold}..."
+            )
+            model.fit_tabpfn_encoders(train_loader, val_loader, test_loader)
+
         # Fit model — resume from cfg.resume_ckpt if set (optional config key)
         resume_path = cfg.get('resume_ckpt', None) if hasattr(cfg, 'get') else None
         trainer.fit(model=model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=resume_path or None)
         model = model_class.load_from_checkpoint(trainer.checkpoint_callback.best_model_path)
-        
-       
 
     logger.info("Evaluating model...")
     trainer.test(model=model, dataloaders=[test_loader], verbose=True)

@@ -9,6 +9,7 @@ from omegaconf import DictConfig
 from rtpt import RTPT
 from torch import nn
 from models import *
+from models.predictor import TabPFNSAXEncoder
 import torchmetrics
 import wandb
 import numpy as np
@@ -128,6 +129,47 @@ class FusionModel(LitModel):
                 for param in enc_copy.parameters():
                     param.requires_grad = False  # freeze parameters
                 self.noise_encoders.append(enc_copy)
+
+    def fit_tabpfn_encoders(self, train_loader, val_loader, test_loader):
+        """Fit each TabPFNSAXEncoder on the fold's train set, then precompute
+        per-sample probability + SAX caches for the full fold (train+val+test).
+
+        No-op if no TabPFNSAXEncoder is present in self.encoders. Configs that
+        wire TabPFNSAXEncoder must set experiment.dataset.args.emit_timeseries=true
+        so per-modality outputs are (T, k_rois) instead of FC vectors.
+        """
+        tabpfn_encoders = [
+            (i, enc) for i, enc in enumerate(self.encoders)
+            if isinstance(enc, TabPFNSAXEncoder)
+        ]
+        if not tabpfn_encoders:
+            return
+
+        def _collect(loader):
+            xs_per_mod = None
+            ys = []
+            for batch in loader:
+                batch_data, _, _ = batch
+                mods, labels = batch_data[:-1], batch_data[-1]
+                if xs_per_mod is None:
+                    xs_per_mod = [[] for _ in mods]
+                for m, t in enumerate(mods):
+                    xs_per_mod[m].append(t.detach().cpu().numpy())
+                ys.append(labels.detach().cpu().numpy())
+            xs_per_mod = [np.concatenate(x, axis=0) for x in xs_per_mod]
+            y = np.concatenate(ys, axis=0)
+            return xs_per_mod, y
+
+        Xtr, ytr = _collect(train_loader)
+        Xva, _ = _collect(val_loader)
+        Xte, _ = _collect(test_loader)
+
+        for enc_idx, enc in tabpfn_encoders:
+            enc.fit_tabpfn(Xtr[enc_idx], ytr)
+            X_all = np.concatenate(
+                [Xtr[enc_idx], Xva[enc_idx], Xte[enc_idx]], axis=0
+            )
+            enc.precompute_probs(X_all)
 
     def training_step(self, train_batch, batch_idx):
         train_batch, corr, noise_ind = train_batch
@@ -252,14 +294,18 @@ class LateFusionClassifier(FusionModel):
         super().__init__(cfg, name=name, steps_per_epoch=steps_per_epoch)
 
     def configure_metrics(self):
-        self.metrics = {
+        # nn.ModuleDict registers the metrics as submodules so Lightning tracks
+        # them: required for the log_metrics() pattern to call .compute() and
+        # .reset() at epoch end correctly. Plain dict would lose Lightning's
+        # auto-aggregation handling.
+        self.metrics = nn.ModuleDict({
             'Accuracy':  torchmetrics.Accuracy(task="multiclass", average='micro', num_classes=self.cfg.experiment.dataset.num_classes),
             # 'Accuracy_macro':  torchmetrics.Accuracy(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'AUROC': torchmetrics.AUROC(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'Precision': torchmetrics.Precision(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'Recall': torchmetrics.Recall(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'F1Score': torchmetrics.F1Score(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
-        }
+        })
 
 
     def _get_cross_entropy_and_accuracy(self, batch, noise_ind) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -273,7 +319,7 @@ class LateFusionClassifier(FusionModel):
         """
         # Sanity check that there are #modalities + 1(target) variables in input
         assert len(batch) == self.num_modalities + 1
-        
+
         data, labels = batch[:-1], batch[-1]
         loss, embeddings, predictions = 0.0,  [], []
         noise_encoders = self.noise_encoders
@@ -286,16 +332,33 @@ class LateFusionClassifier(FusionModel):
                     embeddings += [encoder(unimodal_data)]
                     corruptions += [noise_encoder(noise)]
                     unimodal_prediction = predictor(embeddings[-1])
-            
+
             else:
                 if(encoder is not None):
                     embeddings += [encoder(unimodal_data)]
                 else:
                     embeddings += [unimodal_data]
 
-                corruptions += [noise_encoder(noise)]    
-                unimodal_prediction = predictor(embeddings[-1])
-            
+                corruptions += [noise_encoder(noise)]
+                # Variant iii: TabPFNSAXEncoder uses frozen TabPFN.predict_proba
+                # for the unimodal prediction p_i instead of the learnable
+                # Classifier-MLP predictor. Other encoders keep the upstream
+                # predictor(embeddings) path.
+                if isinstance(encoder, TabPFNSAXEncoder):
+                    with torch.no_grad():
+                        tabpfn_probs = encoder.predict_proba(
+                            time_series_batch=unimodal_data,
+                        )
+                    # Match device, clamp to avoid log(0), renormalise.
+                    unimodal_prediction = tabpfn_probs.to(
+                        embeddings[-1].device
+                    ).clamp(min=1e-8)
+                    unimodal_prediction = unimodal_prediction / unimodal_prediction.sum(
+                        dim=-1, keepdim=True
+                    )
+                else:
+                    unimodal_prediction = predictor(embeddings[-1])
+
 
             if(self.cfg.experiment.head.threshold_input):
                 predictions += [unimodal_prediction.argmax(dim=-1).unsqueeze(1)]
@@ -340,13 +403,13 @@ class LateFusionMultiLabelClassifier(FusionModel):
         self.accuracy = torchmetrics.Accuracy(task="multilabel", num_labels= self.cfg.experiment.dataset.num_classes)
         
     def configure_metrics(self):
-        self.metrics = {
+        self.metrics = nn.ModuleDict({
             'AUROC': torchmetrics.AUROC(task="multilabel", average='weighted', num_labels= self.cfg.experiment.dataset.num_classes),
             'Precision': torchmetrics.Precision(task="multilabel", average='weighted', num_labels= self.cfg.experiment.dataset.num_classes),
             'Recall': torchmetrics.Recall(task="multilabel", average='weighted', num_labels= self.cfg.experiment.dataset.num_classes),
             'F1Score': torchmetrics.F1Score(task="multilabel", average='weighted', num_labels= self.cfg.experiment.dataset.num_classes),
             'Accuracy': torchmetrics.Accuracy(task="multilabel", average='weighted', num_labels= self.cfg.experiment.dataset.num_classes),
-        }
+        })
 
     def _get_cross_entropy_and_accuracy(self, batch) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -392,12 +455,12 @@ class EarlyFusionDiscriminative(FusionModel):
         super().__init__(cfg, name=name, steps_per_epoch=steps_per_epoch)
 
     def configure_metrics(self):
-        self.metrics = {
+        self.metrics = nn.ModuleDict({
             'AUROC': torchmetrics.AUROC(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'Precision': torchmetrics.Precision(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'Recall': torchmetrics.Recall(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
             'F1Score': torchmetrics.F1Score(task="multiclass", average='macro', num_classes=self.cfg.experiment.dataset.num_classes),
-        }
+        })
 
     def _get_cross_entropy_and_accuracy(self, batch) -> Tuple[torch.Tensor, torch.Tensor]:
         """
