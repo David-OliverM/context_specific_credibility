@@ -294,7 +294,12 @@ class TabPFNSAXEncoder(torch.nn.Module):
         x: Union[torch.Tensor, np.ndarray],
         **kwargs,
     ) -> torch.Tensor:
-        """SAX-encode x, project to embed_dim (cache lookup, B x embed_dim)."""
+        """SAX-encode x, project to embed_dim. Hash-cache lookup when warm,
+        live SAX-compute fallback when cold (empty cache or partial miss).
+        The fallback is what lets FusionModel.noise_encoders work: those are
+        deepcopies of self.encoders taken in __init__ (before fit_tabpfn),
+        so their _sax_cache is always empty.
+        """
         if isinstance(x, np.ndarray):
             x_np = x
         else:
@@ -302,7 +307,10 @@ class TabPFNSAXEncoder(torch.nn.Module):
         if x_np.ndim != 3:
             raise ValueError(f"expects (B, T, k_rois); got {x_np.shape}")
         x_np = self._slice_to_modality(x_np)
-        feats = self._hash_lookup(x_np, self._sax_cache)
+        try:
+            feats = self._hash_lookup(x_np, self._sax_cache)
+        except KeyError:
+            feats = self._sax_encode_batch(x_np).astype(np.float32)
         feats_t = torch.from_numpy(feats).to(
             next(self.projector.parameters()).device
         )
