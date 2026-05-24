@@ -51,7 +51,8 @@ def make_model_diagrams(outputs, labels, n_bins=10, prefix = ''):
     plt.xlim(0,1)
     plt.ylim(0,1)
     plt.savefig(f'{prefix}_reliability_diagram.png')
-    plt.show()
+    plt.close()  # was plt.show() — blocks the entire pipeline on any host with an interactive
+                 # matplotlib backend. plt.savefig() above is what actually persists the figure.
     return ece
 
 
