@@ -1,0 +1,104 @@
+
+name: "frankfurt/einet_dirichlet"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}"
+  args:
+    modality_grouping: "dopamine"
+    n_splits: 5
+    fold: 0
+  modalities: 4
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+encoders:
+  dorsal_striatum:
+    type: "MLPEncoder"
+    args:
+      in_dim: 15
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.0
+
+  ventral_striatum:
+    type: "MLPEncoder"
+    args:
+      in_dim: 1
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 32
+      dropout: 0.0
+
+  da_projection_cortex:
+    type: "MLPEncoder"
+    args:
+      in_dim: 66
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.0
+
+  other:
+    type: "MLPEncoder"
+    args:
+      in_dim: 6105
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.0
+
+
+predictors:
+  dorsal_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  ventral_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  da_projection_cortex:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  other:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+head:
+  type: "EinsumNet"
+  threshold_input: False
+  args:
+    num_features: ${experiment.dataset.modalities}
+    num_channels: 1
+    depth: 1
+    num_sums: 20
+    num_leaves: 20
+    num_repetitions: 20
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: 'Dirichlet'
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: False
+    layer_type: 'einsum'
+    dropout: 0.0

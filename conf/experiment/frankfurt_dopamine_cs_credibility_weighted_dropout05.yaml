@@ -1,0 +1,123 @@
+name: "frankfurt/dopamine_cs_credibility_weighted_dropout05"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  # Loader reads modality buckets from code/conf/grouping/dopamine_circuit_v2.csv
+  # (Lorina Zapf 2026-05-07 explicit definition). `path` is the directory with
+  # Amisulpride/, LDopa/, Placebo/, ROI_labels.txt.
+  path: "${data_dir}/neuro_data_UKF"
+  args:
+    modality_grouping: "dopamine"
+    n_splits: 5
+    fold: 0
+  # 4 effective modalities; nominal 5 minus midbrain_proxy (Brain-Stem k=1
+  # falls through the k>=2 filter at runtime).
+  modalities: 4
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+# In-dim values match dopamine_circuit_v2.csv (Lorina-aligned v2):
+#   dorsal_striatum  (Caudate + Putamen L/R, k=4)            -> in_dim=6
+#   ventral_striatum (Accumbens L/R, k=2)                    -> in_dim=1
+#   da_projection_cortex (vmPFC + OFC + ACC + Amygdala
+#                         + dlPFC, k=13)                     -> in_dim=78
+#   other (everything else, k=112)                           -> in_dim=6216
+encoders:
+  dorsal_striatum:
+    type: "MLPEncoder"
+    args:
+      in_dim: 6
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 64
+      dropout: 0.5
+
+  ventral_striatum:
+    type: "MLPEncoder"
+    args:
+      in_dim: 1
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 32
+      dropout: 0.5
+
+  da_projection_cortex:
+    type: "MLPEncoder"
+    args:
+      in_dim: 78
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+
+  other:
+    type: "MLPEncoder"
+    args:
+      in_dim: 6216
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 256
+      dropout: 0.5
+
+
+predictors:
+  dorsal_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  ventral_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  da_projection_cortex:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  other:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+head:
+  type: "CredibilityWeightedMean"
+  threshold_input: False
+  args:
+    num_features: ${experiment.dataset.modalities}
+    num_channels: 1
+    depth: 1
+    num_sums: 20
+    num_leaves: 20
+    num_repetitions: 20
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: 'Dirichlet'
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: False
+    layer_type: 'einsum'
+    dropout: 0.5
+    conditional_sum: True
+    sum_cond_fn_type: 'Classifier'
+    sum_cond_fn_args:
+      # context = concat of encoder embeddings = 4 * 64 = 256
+      in_dim: 256
+      n_layers: 3
+      n_hidden: 64
+      final_activation: None
+      out_dim: None
