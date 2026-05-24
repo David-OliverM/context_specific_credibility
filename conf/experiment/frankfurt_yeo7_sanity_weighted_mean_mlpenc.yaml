@@ -16,42 +16,141 @@ dataset:
 encoders:
   VIS:
     type: "MLPEncoder"
-    args: {in_dim: 153, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+    args:
+      in_dim: 153
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.2
   SOMMOT:
     type: "MLPEncoder"
-    args: {in_dim: 153, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+    args:
+      in_dim: 153
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.2
   DORSATTN:
     type: "MLPEncoder"
-    args: {in_dim: 28, embed_dim: 64, n_layers: 2, n_hidden: 64, dropout: 0.2}
+    args:
+      in_dim: 28
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 64
+      dropout: 0.2
   VENTATTN:
     type: "MLPEncoder"
-    args: {in_dim: 21, embed_dim: 64, n_layers: 2, n_hidden: 64, dropout: 0.2}
+    args:
+      in_dim: 21
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 64
+      dropout: 0.2
   LIMBIC:
     type: "MLPEncoder"
-    args: {in_dim: 120, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+    args:
+      in_dim: 120
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.2
   CONT:
     type: "MLPEncoder"
-    args: {in_dim: 28, embed_dim: 64, n_layers: 2, n_hidden: 64, dropout: 0.2}
+    args:
+      in_dim: 28
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 64
+      dropout: 0.2
   DEFAULT:
     type: "MLPEncoder"
-    args: {in_dim: 120, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+    args:
+      in_dim: 120
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.2
   SUBCORTICAL:
     type: "MLPEncoder"
-    args: {in_dim: 105, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+    args:
+      in_dim: 105
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.2
   CEREBELLAR:
     type: "MLPEncoder"
-    args: {in_dim: 325, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+    args:
+      in_dim: 325
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.2
 
 predictors:
-  VIS:        {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
-  SOMMOT:     {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
-  DORSATTN:   {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
-  VENTATTN:   {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
-  LIMBIC:     {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
-  CONT:       {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
-  DEFAULT:    {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
-  SUBCORTICAL:{type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
-  CEREBELLAR: {type: "Classifier", args: {in_dim: 64, out_dim: ${experiment.dataset.num_classes}, n_layers: 1, n_hidden: 64}}
+  VIS:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  SOMMOT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  DORSATTN:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  VENTATTN:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  LIMBIC:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  CONT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  DEFAULT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  SUBCORTICAL:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  CEREBELLAR:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
 
 head:
   type: "WeightedMean"
