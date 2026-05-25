@@ -43,15 +43,33 @@ encoders:
     args: {in_dim: 325, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
 
 predictors:
-  VIS:        {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
-  SOMMOT:     {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
-  DORSATTN:   {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
-  VENTATTN:   {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
-  LIMBIC:     {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
-  CONT:       {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
-  DEFAULT:    {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
-  SUBCORTICAL:{type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
-  CEREBELLAR: {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
+  VIS:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+  SOMMOT:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+  DORSATTN:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+  VENTATTN:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+  LIMBIC:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+  CONT:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+  DEFAULT:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+  SUBCORTICAL:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+  CEREBELLAR:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
 
 # CWM (plain) head — conditional_sum=False, no hypernetwork
 head:
