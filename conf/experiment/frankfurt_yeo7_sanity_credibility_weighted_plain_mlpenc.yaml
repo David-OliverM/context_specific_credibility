@@ -1,0 +1,74 @@
+name: "frankfurt/yeo7_sanity_credibility_weighted_plain_mlpenc"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}/neuro_data_UKF"
+  args:
+    modality_grouping: "yeo7"
+    n_splits: 3
+    fold: 0
+  modalities: 9
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+encoders:
+  VIS:
+    type: "MLPEncoder"
+    args: {in_dim: 153, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+  SOMMOT:
+    type: "MLPEncoder"
+    args: {in_dim: 153, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+  DORSATTN:
+    type: "MLPEncoder"
+    args: {in_dim: 28, embed_dim: 64, n_layers: 2, n_hidden: 64, dropout: 0.2}
+  VENTATTN:
+    type: "MLPEncoder"
+    args: {in_dim: 21, embed_dim: 64, n_layers: 2, n_hidden: 64, dropout: 0.2}
+  LIMBIC:
+    type: "MLPEncoder"
+    args: {in_dim: 120, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+  CONT:
+    type: "MLPEncoder"
+    args: {in_dim: 28, embed_dim: 64, n_layers: 2, n_hidden: 64, dropout: 0.2}
+  DEFAULT:
+    type: "MLPEncoder"
+    args: {in_dim: 120, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+  SUBCORTICAL:
+    type: "MLPEncoder"
+    args: {in_dim: 105, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+  CEREBELLAR:
+    type: "MLPEncoder"
+    args: {in_dim: 325, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+
+predictors:
+  VIS:        {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
+  SOMMOT:     {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
+  DORSATTN:   {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
+  VENTATTN:   {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
+  LIMBIC:     {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
+  CONT:       {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
+  DEFAULT:    {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
+  SUBCORTICAL:{type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
+  CEREBELLAR: {type: "Classifier", args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}}
+
+# CWM (plain) head — conditional_sum=False, no hypernetwork
+head:
+  type: "CredibilityWeightedMean"
+  threshold_input: False
+  args:
+    num_features: ${experiment.dataset.modalities}
+    num_channels: 1
+    depth: 1
+    num_sums: 20
+    num_leaves: 20
+    num_repetitions: 20
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: 'Dirichlet'
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: False
+    layer_type: 'einsum'
+    dropout: 0.2
+    conditional_sum: False

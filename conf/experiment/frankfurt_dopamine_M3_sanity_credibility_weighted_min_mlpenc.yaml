@@ -1,0 +1,63 @@
+name: "frankfurt/dopamine_M3_sanity_credibility_weighted_min_mlpenc"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}/neuro_data_UKF"
+  args:
+    modality_grouping: "dopamine_M3"
+    n_splits: 3
+    fold: 0
+  modalities: 3
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+encoders:
+  dorsal_striatum:
+    type: "MLPEncoder"
+    args: {in_dim: 6, embed_dim: 64, n_layers: 2, n_hidden: 64, dropout: 0.2}
+  ventral_striatum:
+    type: "MLPEncoder"
+    args: {in_dim: 1, embed_dim: 64, n_layers: 2, n_hidden: 32, dropout: 0.2}
+  da_projection_cortex:
+    type: "MLPEncoder"
+    args: {in_dim: 78, embed_dim: 64, n_layers: 2, n_hidden: 128, dropout: 0.2}
+
+predictors:
+  dorsal_striatum:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+  ventral_striatum:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+  da_projection_cortex:
+    type: "Classifier"
+    args: {in_dim: 64, out_dim: 3, n_layers: 1, n_hidden: 64}
+
+# C²MF (min) — small Einet + small hypernetwork
+head:
+  type: "CredibilityWeightedMean"
+  threshold_input: False
+  args:
+    num_features: ${experiment.dataset.modalities}
+    num_channels: 1
+    depth: 1
+    num_sums: 2
+    num_leaves: 2
+    num_repetitions: 1
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: 'Dirichlet'
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: False
+    layer_type: 'einsum'
+    dropout: 0.0
+    conditional_sum: True
+    sum_cond_fn_type: 'Classifier'
+    sum_cond_fn_args:
+      in_dim: 192
+      n_layers: 1
+      n_hidden: 16
+      final_activation: None
+      out_dim: None
