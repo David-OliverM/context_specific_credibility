@@ -1,0 +1,189 @@
+name: "frankfurt/yeo7_f2.1_weighted_mean_tabpfn_fc"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}/neuro_data_UKF"
+  args:
+    modality_grouping: "yeo7"
+    n_splits: 3
+    fold: 0
+    emit_timeseries: True
+  modalities: 9
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+encoders:
+  VIS:
+    type: "TabPFNFCEncoder"
+    args:
+      roi_indices: [44, 45, 46, 47, 57, 58, 63, 64, 65, 66, 71, 72, 73, 74, 87, 88, 89, 90]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+  SOMMOT:
+    type: "TabPFNFCEncoder"
+    args:
+      roi_indices: [12, 13, 18, 19, 32, 33, 49, 50, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+  DORSATTN:
+    type: "TabPFNFCEncoder"
+    args:
+      roi_indices: [24, 25, 30, 31, 34, 35, 42, 43]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+  VENTATTN:
+    type: "TabPFNFCEncoder"
+    args:
+      roi_indices: [2, 3, 36, 37, 54, 75, 76]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+  LIMBIC:
+    type: "TabPFNFCEncoder"
+    args:
+      roi_indices: [14, 15, 26, 27, 28, 29, 48, 51, 59, 60, 61, 62, 67, 68, 69, 70]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+  CONT:
+    type: "TabPFNFCEncoder"
+    args:
+      roi_indices: [0, 1, 6, 7, 10, 11, 38, 39]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+  DEFAULT:
+    type: "TabPFNFCEncoder"
+    args:
+      roi_indices: [4, 5, 8, 9, 16, 17, 20, 21, 22, 23, 40, 41, 52, 53, 55, 56]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+  SUBCORTICAL:
+    type: "TabPFNFCEncoder"
+    args:
+      roi_indices: [91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+  CEREBELLAR:
+    type: "TabPFNFCEncoder"
+    args:
+      roi_indices: [106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+
+predictors:
+  VIS:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  SOMMOT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  DORSATTN:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  VENTATTN:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  LIMBIC:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  CONT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  DEFAULT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  SUBCORTICAL:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  CEREBELLAR:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+head:
+  type: "WeightedMean"
+  threshold_input: False
+  args:
+    weight_dims: [1, 9, 1]
+    normalize_dim: 1
+    multilabel: False
