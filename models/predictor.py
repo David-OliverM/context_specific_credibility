@@ -328,15 +328,16 @@ class TabPFNSAXEncoder(torch.nn.Module):
 
 
 # ---------------------------------------------------------------------------
-# F2.0 (re-introduced on f2.5 branch): TabPFN(SAX) for p_i, MLP(FC) for h_i.
+# F2.1: TabPFN(FC) for p_i, Linear(SAX) for h_i unchanged.
 # ---------------------------------------------------------------------------
 #
-# F2.5 stacks F2.0's h_i upgrade onto F2.2's SAX-vocab-tuned p_i.  This
-# class is the F2.0 building block. With sax_alphabet=16, sax_word_size=32
-# (the F2.2 Stage-1 winner), it implements the F2.5a variant.
+# Single-knob test (vs Sanity-Sweep TabPFN baseline): switch ONLY TabPFN's
+# input from SAX-tokens to FC-features (Pearson upper-triangle).  Orthogonal
+# to F2.0 (which changed h_i).  Motivated by F2.0 outcome: h_i is NOT the
+# bottleneck on dopM3, so the prime suspect is p_i, i.e. TabPFN's input format.
 #
-class TabPFNSAXMLPEncoder(TabPFNSAXEncoder):
-    """TabPFN-SAX for p_i, MLPEncoder(FC) for h_i.  F2.0 / F2.5a building block."""
+class TabPFNFCEncoder(TabPFNSAXEncoder):
+    """TabPFN over FC features for p_i. h_i pipeline (Linear(SAX)) inherited."""
 
     def __init__(
         self,
@@ -349,9 +350,6 @@ class TabPFNSAXMLPEncoder(TabPFNSAXEncoder):
         tabpfn_device: str = "cpu",
         freeze_params: bool = False,
         random_state: int = 42,
-        mlp_n_layers: int = 2,
-        mlp_n_hidden: int = 128,
-        mlp_dropout: float = 0.2,
         **_ignored,
     ):
         super().__init__(
@@ -362,27 +360,16 @@ class TabPFNSAXMLPEncoder(TabPFNSAXEncoder):
             sax_strategy=sax_strategy,
             n_classes=n_classes,
             tabpfn_device=tabpfn_device,
-            freeze_params=False,
+            freeze_params=freeze_params,
             random_state=random_state,
         )
-        del self.projector  # F2.0: replace SAX-linear projector with MLP(FC)
         k = len(self.roi_indices)
         if k < 2:
-            raise ValueError(f"TabPFNSAXMLPEncoder needs k>=2 ROIs for FC; got {k}")
+            raise ValueError(f"TabPFNFCEncoder needs k>=2 ROIs for FC; got {k}")
         self.fc_dim = k * (k - 1) // 2
-        self.h_encoder = make_encoder(
-            in_dim=self.fc_dim,
-            embed_dim=embed_dim,
-            n_layers=mlp_n_layers,
-            n_hidden=mlp_n_hidden,
-            activation='torch.nn.Tanh()',
-            dropout=mlp_dropout,
-        )
-        if freeze_params:
-            for p in self.h_encoder.parameters():
-                p.requires_grad = False
 
     def _compute_fc(self, ts_batch_np: np.ndarray) -> np.ndarray:
+        """(B, T, k_rois) -> (B, k*(k-1)/2) Pearson upper-triangle float32."""
         B, _, k = ts_batch_np.shape
         if k != len(self.roi_indices):
             raise ValueError(
@@ -397,32 +384,6 @@ class TabPFNSAXMLPEncoder(TabPFNSAXEncoder):
             out[b] = corr[triu_i, triu_j].astype(np.float32)
         return out
 
-    def forward(self, x, **kwargs):
-        if isinstance(x, np.ndarray):
-            x_np = x
-        else:
-            x_np = x.detach().cpu().numpy()
-        if x_np.ndim != 3:
-            raise ValueError(f"expects (B, T, k_rois); got {x_np.shape}")
-        x_np = self._slice_to_modality(x_np)
-        fc_np = self._compute_fc(x_np)
-        fc_t = torch.from_numpy(fc_np).to(
-            next(self.h_encoder.parameters()).device
-        )
-        return self.h_encoder(fc_t)
-
-
-# ---------------------------------------------------------------------------
-# F2.5b (NEW): TabPFN(FC) for p_i, MLP(FC) for h_i — stacks F2.1 + F2.0.
-# ---------------------------------------------------------------------------
-#
-# Two confirmed positive levers combined: F2.1 (FC as TabPFN input)
-# replaces SAX-tokens; F2.0 (MLPEncoder(FC) as h_i) replaces Linear(SAX).
-# Both pipelines feed off the same FC features → computed once per batch.
-#
-class TabPFNFCMLPEncoder(TabPFNSAXMLPEncoder):
-    """TabPFN over FC features for p_i, MLPEncoder(FC) for h_i.  F2.5b."""
-
     def fit_tabpfn(self, X_train_full_ts: np.ndarray, y_train: np.ndarray) -> None:
         """Override: fit TabPFN's in-context demos on FC features (not SAX)."""
         if X_train_full_ts.ndim != 3:
@@ -432,17 +393,14 @@ class TabPFNFCMLPEncoder(TabPFNSAXMLPEncoder):
         ts_mod = self._slice_to_modality(X_train_full_ts)
         feats = self._compute_fc(ts_mod).astype(np.float32)
         self._tabpfn = TabPFNClassifier(
-            device=self.tabpfn_device,
-            random_state=self.random_state,
-            ignore_pretraining_limits=True,
+            device=self.tabpfn_device, random_state=self.random_state
         )
         self._tabpfn.fit(feats, np.asarray(y_train).astype(np.int64))
         self._probs_cache = {}
         self._sax_cache = {}
 
     def precompute_probs(self, X_all_full_ts: np.ndarray, sample_indices=None) -> None:
-        """Override: predict_proba on FC features.  h_i path computes FC live
-        in inherited forward(), so no h-side cache populated here."""
+        """Override: predict_proba on FC; also populate SAX cache for h_i path."""
         del sample_indices
         if self._tabpfn is None:
             raise RuntimeError("precompute_probs requires fit_tabpfn first.")
@@ -450,6 +408,9 @@ class TabPFNFCMLPEncoder(TabPFNSAXMLPEncoder):
         fc_feats = self._compute_fc(ts_mod).astype(np.float32)
         with torch.no_grad():
             probs = self._tabpfn.predict_proba(fc_feats)
+        # h_i forward path stays SAX-based — populate sax cache here too.
+        sax_feats = self._sax_encode_batch(ts_mod).astype(np.float32)
         for row in range(ts_mod.shape[0]):
             h = int(hash(ts_mod[row].tobytes()))
             self._probs_cache[h] = probs[row].astype(np.float32)
+            self._sax_cache[h] = sax_feats[row]
