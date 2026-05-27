@@ -1,0 +1,94 @@
+name: "frankfurt/dopamine_M3_f2.5_b_fc_mlp_h_weighted_mean_tabpfn"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}/neuro_data_UKF"
+  args:
+    modality_grouping: "dopamine_M3"
+    n_splits: 3
+    fold: 0
+    emit_timeseries: True
+  modalities: 3
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+encoders:
+  dorsal_striatum:
+    type: "TabPFNFCMLPEncoder"
+    args:
+      roi_indices: [93, 94, 95, 96]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+
+      mlp_n_layers: 2
+      mlp_n_hidden: 64
+      mlp_dropout: 0.2
+  ventral_striatum:
+    type: "TabPFNFCMLPEncoder"
+    args:
+      roi_indices: [103, 104]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+
+      mlp_n_layers: 2
+      mlp_n_hidden: 32
+      mlp_dropout: 0.2
+  da_projection_cortex:
+    type: "TabPFNFCMLPEncoder"
+    args:
+      roi_indices: [4, 5, 6, 7, 48, 51, 52, 53, 54, 59, 60, 101, 102]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+
+      mlp_n_layers: 2
+      mlp_n_hidden: 128
+      mlp_dropout: 0.2
+predictors:
+  dorsal_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  ventral_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+  da_projection_cortex:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+head:
+  type: "WeightedMean"
+  threshold_input: False
+  args:
+    weight_dims: [1, 3, 1]
+    normalize_dim: 1
+    multilabel: False
