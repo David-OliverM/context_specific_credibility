@@ -229,7 +229,15 @@ class TabPFNSAXEncoder(torch.nn.Module):
         )
 
     def fit_tabpfn(self, X_train_full_ts: np.ndarray, y_train: np.ndarray) -> None:
-        """Fit in-context TabPFN on the modality's SAX features."""
+        """Fit in-context TabPFN on the modality's SAX features.
+
+        ``ignore_pretraining_limits=True`` required for F2.2 Stage 2 yeo7
+        cells where SAX with word_size=32 produces feature counts > 500
+        (e.g. CEREBELLAR k=26 × 32 = 832; VIS k=18 × 32 = 576).  TabPFN's
+        official upper limit is 500 — Hollmann2025 §Limitations note that
+        the model still works above the limit but with potentially degraded
+        quality. Quality is judged from results, not refused upfront.
+        """
         if X_train_full_ts.ndim != 3:
             raise ValueError(
                 f"X_train_full_ts must be (n, T, n_rois); got {X_train_full_ts.shape}"
@@ -237,7 +245,9 @@ class TabPFNSAXEncoder(torch.nn.Module):
         ts_mod = self._slice_to_modality(X_train_full_ts)
         feats = self._sax_encode_batch(ts_mod).astype(np.float32)
         self._tabpfn = TabPFNClassifier(
-            device=self.tabpfn_device, random_state=self.random_state
+            device=self.tabpfn_device,
+            random_state=self.random_state,
+            ignore_pretraining_limits=True,
         )
         self._tabpfn.fit(feats, np.asarray(y_train).astype(np.int64))
         self._probs_cache = {}
