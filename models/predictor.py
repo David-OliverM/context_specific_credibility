@@ -315,3 +315,97 @@ class TabPFNSAXEncoder(torch.nn.Module):
             next(self.projector.parameters()).device
         )
         return self.projector(feats_t)
+
+
+# ---------------------------------------------------------------------------
+# F2.0: TabPFN-SAX (for p_i) + MLPEncoder over FC features (for h_i)
+# ---------------------------------------------------------------------------
+#
+# Variant-iii extension. p_i comes from frozen TabPFN.predict_proba(SAX(ts))
+# exactly as in TabPFNSAXEncoder. The embedding h_i is upgraded from a single
+# Linear(SAX(ts)) to MLPEncoder(FC(ts)) — same pipeline the pure MLP arm uses
+# in the Sanity-Sweep (2026-05-25). FC = Pearson upper-triangle, k*(k-1)/2 dim.
+#
+class TabPFNSAXMLPEncoder(TabPFNSAXEncoder):
+    """TabPFN-SAX for p_i, MLPEncoder(FC) for h_i. F2.0 phase."""
+
+    def __init__(
+        self,
+        roi_indices,
+        embed_dim: int = 64,
+        sax_alphabet: int = 4,
+        sax_word_size: int = 8,
+        sax_strategy: str = "quantile",
+        n_classes: int = 3,
+        tabpfn_device: str = "cpu",
+        freeze_params: bool = False,
+        random_state: int = 42,
+        mlp_n_layers: int = 2,
+        mlp_n_hidden: int = 128,
+        mlp_dropout: float = 0.2,
+        **_ignored,
+    ):
+        super().__init__(
+            roi_indices=roi_indices,
+            embed_dim=embed_dim,
+            sax_alphabet=sax_alphabet,
+            sax_word_size=sax_word_size,
+            sax_strategy=sax_strategy,
+            n_classes=n_classes,
+            tabpfn_device=tabpfn_device,
+            freeze_params=False,  # we will freeze h_encoder ourselves below
+            random_state=random_state,
+        )
+        # Drop the SAX-linear projector inherited from TabPFNSAXEncoder — F2.0
+        # replaces it with MLPEncoder(FC).  delattr removes from self._modules
+        # so it's neither in state_dict nor seen by the optimizer.
+        del self.projector
+
+        k = len(self.roi_indices)
+        if k < 2:
+            raise ValueError(
+                f"TabPFNSAXMLPEncoder needs k>=2 ROIs for FC; got {k}"
+            )
+        self.fc_dim = k * (k - 1) // 2
+
+        self.h_encoder = make_encoder(
+            in_dim=self.fc_dim,
+            embed_dim=embed_dim,
+            n_layers=mlp_n_layers,
+            n_hidden=mlp_n_hidden,
+            activation='torch.nn.Tanh()',
+            dropout=mlp_dropout,
+        )
+        if freeze_params:
+            for p in self.h_encoder.parameters():
+                p.requires_grad = False
+
+    def _compute_fc(self, ts_batch_np: np.ndarray) -> np.ndarray:
+        """(B, T, k_rois) -> (B, k*(k-1)/2) Pearson upper-triangle float32."""
+        B, _, k = ts_batch_np.shape
+        if k != len(self.roi_indices):
+            raise ValueError(
+                f"k_rois mismatch: expected {len(self.roi_indices)}, got {k}"
+            )
+        triu_i, triu_j = np.triu_indices(k, k=1)
+        out = np.empty((B, triu_i.size), dtype=np.float32)
+        for b in range(B):
+            with np.errstate(invalid='ignore', divide='ignore'):
+                corr = np.corrcoef(ts_batch_np[b].T)  # (k, k)
+            corr = np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
+            out[b] = corr[triu_i, triu_j].astype(np.float32)
+        return out
+
+    def forward(self, x, **kwargs):
+        if isinstance(x, np.ndarray):
+            x_np = x
+        else:
+            x_np = x.detach().cpu().numpy()
+        if x_np.ndim != 3:
+            raise ValueError(f"expects (B, T, k_rois); got {x_np.shape}")
+        x_np = self._slice_to_modality(x_np)
+        fc_np = self._compute_fc(x_np)
+        fc_t = torch.from_numpy(fc_np).to(
+            next(self.h_encoder.parameters()).device
+        )
+        return self.h_encoder(fc_t)
