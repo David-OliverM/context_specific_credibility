@@ -1,0 +1,107 @@
+name: "frankfurt/dopamine_M3_f2.5_a_sax_w32_mlp_h_credibility_weighted_plain_tabpfn"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}/neuro_data_UKF"
+  args:
+    modality_grouping: "dopamine_M3"
+    n_splits: 3
+    fold: 0
+    emit_timeseries: True
+  modalities: 3
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+encoders:
+  dorsal_striatum:
+    type: "TabPFNSAXMLPEncoder"
+    args:
+      roi_indices: [93, 94, 95, 96]
+      embed_dim: 64
+      sax_alphabet: 16
+      sax_word_size: 32
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+      mlp_n_layers: 2
+      mlp_n_hidden: 64
+      mlp_dropout: 0.2
+  ventral_striatum:
+    type: "TabPFNSAXMLPEncoder"
+    args:
+      roi_indices: [103, 104]
+      embed_dim: 64
+      sax_alphabet: 16
+      sax_word_size: 32
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+      mlp_n_layers: 2
+      mlp_n_hidden: 32
+      mlp_dropout: 0.2
+  da_projection_cortex:
+    type: "TabPFNSAXMLPEncoder"
+    args:
+      roi_indices: [4, 5, 6, 7, 48, 51, 52, 53, 54, 59, 60, 101, 102]
+      embed_dim: 64
+      sax_alphabet: 16
+      sax_word_size: 32
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+
+      mlp_n_layers: 2
+      mlp_n_hidden: 128
+      mlp_dropout: 0.2
+predictors:
+  dorsal_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  ventral_striatum:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  da_projection_cortex:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+# CWM (plain) — KEIN Hypernetwork. conditional_sum=False bedeutet die
+# Einet sum-weights sind fest-gelernt (nicht context-spezifisch). Forward
+# nutzt context im Sinne von cond_input für die Einet, aber das wird bei
+# conditional_sum=False ignoriert. Trennt Credibility-Weighting (bleibt)
+# von Context-Specific-Sum-Hypernetwork (raus = C²MF wird zu CWM).
+# Default-Einet-Größe wie C²MF (full) für fairen Vergleich.
+head:
+  type: "CredibilityWeightedMean"
+  threshold_input: False
+  args:
+    num_features: ${experiment.dataset.modalities}
+    num_channels: 1
+    depth: 1
+    num_sums: 20
+    num_leaves: 20
+    num_repetitions: 20
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: 'Dirichlet'
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: False
+    layer_type: 'einsum'
+    dropout: 0.2
+    conditional_sum: False
