@@ -1,4 +1,4 @@
-name: "frankfurt/dopamine_M3_f2.1_weighted_mean_tabpfn_fc"
+name: "frankfurt/dopamine_M3_f2.2_s2_weighted_mean_a16_w32_tabpfn"
 classification: True
 multilabel: False
 dataset:
@@ -16,36 +16,36 @@ dataset:
 
 encoders:
   dorsal_striatum:
-    type: "TabPFNFCEncoder"
+    type: "TabPFNSAXEncoder"
     args:
       roi_indices: [93, 94, 95, 96]
       embed_dim: 64
-      sax_alphabet: 4
-      sax_word_size: 8
+      sax_alphabet: 16
+      sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
       tabpfn_device: "cuda"
       random_state: 42
 
   ventral_striatum:
-    type: "TabPFNFCEncoder"
+    type: "TabPFNSAXEncoder"
     args:
       roi_indices: [103, 104]
       embed_dim: 64
-      sax_alphabet: 4
-      sax_word_size: 8
+      sax_alphabet: 16
+      sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
       tabpfn_device: "cuda"
       random_state: 42
 
   da_projection_cortex:
-    type: "TabPFNFCEncoder"
+    type: "TabPFNSAXEncoder"
     args:
       roi_indices: [4, 5, 6, 7, 48, 51, 52, 53, 54, 59, 60, 101, 102]
       embed_dim: 64
-      sax_alphabet: 4
-      sax_word_size: 8
+      sax_alphabet: 16
+      sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
       tabpfn_device: "cuda"
