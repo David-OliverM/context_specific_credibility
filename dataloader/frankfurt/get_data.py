@@ -417,35 +417,50 @@ def _subject_kfold(
     subjects, 50/50).
 
     Args:
-      subject_shuffle_seed: if given, the SUBJECT-level ordering is re-shuffled
-        using this seed BEFORE GroupKFold, producing different subject→fold
-        allocations per "repeat".  This is the key knob for multi-repeat CV
-        (F2.5a-MR).  If None (default), the historical deterministic split
-        is preserved (backwards compatible with all F1.x / F2.x results).
-    """
-    if subject_shuffle_seed is not None:
-        # Reorder items so that unique-subjects appear in a seed-shuffled order
-        # before GroupKFold sees them.  Within a subject's scans, preserve
-        # the original filename order for determinism.
-        unique_subjects = np.unique(np.array([s for _, _, s in items]))
-        rng_subj = np.random.default_rng(int(subject_shuffle_seed))
-        shuffled = unique_subjects.copy()
-        rng_subj.shuffle(shuffled)
-        pos = {int(s): i for i, s in enumerate(shuffled)}
-        items = sorted(items, key=lambda it: (pos[int(it[2])], it[0].name))
+      subject_shuffle_seed: if given, the SUBJECT→FOLD allocation is randomly
+        re-shuffled with this seed (manual subject-level K-fold over shuffled
+        unique subjects).  If None (default), sklearn GroupKFold is used,
+        which assigns subjects to folds DETERMINISTICALLY based on group
+        labels — preserves historical splits across all F1.x / F2.x results
+        that ran without this kwarg.
 
+    NOTE on bug fix 2026-05-28: an earlier implementation tried to re-shuffle
+    by re-ordering items before GroupKFold.split.  That had no effect because
+    sklearn's GroupKFold assigns groups based on group-label round-robin
+    irrespective of input item order.  Now we bypass GroupKFold entirely
+    when shuffle_seed is given.
+    """
     subjects = np.array([s for _, _, s in items])
-    indices = np.arange(len(items))
-    # GroupKFold deterministic ordering -> picks the fold-th split.
-    gkf = GroupKFold(n_splits=n_splits)
-    splits = list(gkf.split(indices, groups=subjects))
-    train_idx, holdout_idx = splits[fold]
-    holdout_subjects = np.unique(subjects[holdout_idx])
+    unique_subjects = np.unique(subjects)
+
+    if subject_shuffle_seed is not None:
+        # Manual subject-level K-fold over shuffled unique subjects.
+        rng_subj = np.random.default_rng(int(subject_shuffle_seed))
+        shuffled_subjects = unique_subjects.copy()
+        rng_subj.shuffle(shuffled_subjects)
+        # array_split distributes subjects approximately evenly into n_splits chunks.
+        fold_subjects_list = np.array_split(shuffled_subjects, n_splits)
+        if not (0 <= fold < n_splits):
+            raise ValueError(f"fold must be in [0, {n_splits}); got {fold}")
+        holdout_subjects = fold_subjects_list[fold]
+        holdout_mask = np.isin(subjects, holdout_subjects)
+        holdout_idx = np.where(holdout_mask)[0]
+        train_idx = np.where(~holdout_mask)[0]
+    else:
+        # Backwards-compat: GroupKFold deterministic split based on group labels.
+        indices = np.arange(len(items))
+        gkf = GroupKFold(n_splits=n_splits)
+        splits = list(gkf.split(indices, groups=subjects))
+        train_idx, holdout_idx = splits[fold]
+        holdout_subjects = np.unique(subjects[holdout_idx])
+
+    # Within holdout, 50/50 split into val vs test by subject.
+    holdout_subjects_arr = np.array(holdout_subjects, dtype=subjects.dtype)
     rng = np.random.default_rng(42 + fold)
-    rng.shuffle(holdout_subjects)
-    half = max(1, len(holdout_subjects) // 2)
-    val_subjects = set(holdout_subjects[:half].tolist())
-    test_subjects = set(holdout_subjects[half:].tolist())
+    rng.shuffle(holdout_subjects_arr)
+    half = max(1, len(holdout_subjects_arr) // 2)
+    val_subjects = set(holdout_subjects_arr[:half].tolist())
+    test_subjects = set(holdout_subjects_arr[half:].tolist())
     val_idx = [i for i in holdout_idx if subjects[i] in val_subjects]
     test_idx = [i for i in holdout_idx if subjects[i] in test_subjects]
     train_items = [items[i] for i in train_idx]
