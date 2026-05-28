@@ -229,7 +229,12 @@ class TabPFNSAXEncoder(torch.nn.Module):
         )
 
     def fit_tabpfn(self, X_train_full_ts: np.ndarray, y_train: np.ndarray) -> None:
-        """Fit in-context TabPFN on the modality's SAX features."""
+        """Fit in-context TabPFN on the modality's SAX features.
+
+        ``ignore_pretraining_limits=True`` carried forward from F2.2 — no-op
+        for vocabs that stay under TabPFN's 500-feature limit, required for
+        higher word_size variants.
+        """
         if X_train_full_ts.ndim != 3:
             raise ValueError(
                 f"X_train_full_ts must be (n, T, n_rois); got {X_train_full_ts.shape}"
@@ -237,7 +242,9 @@ class TabPFNSAXEncoder(torch.nn.Module):
         ts_mod = self._slice_to_modality(X_train_full_ts)
         feats = self._sax_encode_batch(ts_mod).astype(np.float32)
         self._tabpfn = TabPFNClassifier(
-            device=self.tabpfn_device, random_state=self.random_state
+            device=self.tabpfn_device,
+            random_state=self.random_state,
+            ignore_pretraining_limits=True,
         )
         self._tabpfn.fit(feats, np.asarray(y_train).astype(np.int64))
         self._probs_cache = {}
@@ -315,3 +322,126 @@ class TabPFNSAXEncoder(torch.nn.Module):
             next(self.projector.parameters()).device
         )
         return self.projector(feats_t)
+
+
+# ---------------------------------------------------------------------------
+# F2.3: TabPFN-internal embedding as h_i (instead of Linear(SAX))
+# ---------------------------------------------------------------------------
+#
+# Single-knob test vs Sanity baseline: h_i comes from TabPFN's transformer-
+# internal representation (clf.get_embeddings, averaged across estimators)
+# projected to embed_dim by a small learnable Linear.  p_i = TabPFN.predict_proba
+# unchanged.  Both use the same SAX-input features per Sanity-Sweep vocab
+# (a=4, w=8), unless overridden via Hydra.
+#
+# Embedding API (tabpfn 2.2.1):
+#   clf.get_embeddings(X, data_source="test") -> (n_estimators=8, n_samples, 192)
+#   We mean over estimators -> (n_samples, 192) -> learnable Linear -> (n_samples, embed_dim).
+#
+class TabPFNEmbeddingEncoder(TabPFNSAXEncoder):
+    """TabPFN-internal embedding as h_i.  F2.3."""
+
+    TABPFN_EMBED_DIM = 192  # tabpfn 2.x model dim; verified empirically
+
+    def __init__(
+        self,
+        roi_indices,
+        embed_dim: int = 64,
+        sax_alphabet: int = 4,
+        sax_word_size: int = 8,
+        sax_strategy: str = "quantile",
+        n_classes: int = 3,
+        tabpfn_device: str = "cpu",
+        freeze_params: bool = False,
+        random_state: int = 42,
+        **_ignored,
+    ):
+        super().__init__(
+            roi_indices=roi_indices,
+            embed_dim=embed_dim,
+            sax_alphabet=sax_alphabet,
+            sax_word_size=sax_word_size,
+            sax_strategy=sax_strategy,
+            n_classes=n_classes,
+            tabpfn_device=tabpfn_device,
+            freeze_params=False,
+            random_state=random_state,
+        )
+        # Replace inherited SAX-linear projector with a TabPFN-embed projector.
+        del self.projector
+        self.projector = torch.nn.Linear(self.TABPFN_EMBED_DIM, self.embed_dim)
+        if freeze_params:
+            for p in self.projector.parameters():
+                p.requires_grad = False
+        # New cache: hash(ts.tobytes()) -> mean-over-estimators embedding (192,)
+        self._embed_cache: dict[int, np.ndarray] = {}
+
+    def precompute_probs(self, X_all_full_ts: np.ndarray, sample_indices=None) -> None:
+        """Override: populate _probs_cache (TabPFN.predict_proba) AND
+        _embed_cache (TabPFN.get_embeddings, mean over estimators)."""
+        del sample_indices
+        if self._tabpfn is None:
+            raise RuntimeError("precompute_probs requires fit_tabpfn first.")
+        ts_mod = self._slice_to_modality(X_all_full_ts)
+        sax_feats = self._sax_encode_batch(ts_mod).astype(np.float32)
+        with torch.no_grad():
+            probs = self._tabpfn.predict_proba(sax_feats)
+            # get_embeddings returns (n_estimators, n_samples, embed_dim)
+            embed_raw = self._tabpfn.get_embeddings(sax_feats, data_source="test")
+            # mean over estimators -> (n_samples, embed_dim)
+            if embed_raw.ndim == 3:
+                embed_mean = embed_raw.mean(axis=0)
+            else:
+                embed_mean = embed_raw
+            embed_mean = np.asarray(embed_mean, dtype=np.float32)
+        if embed_mean.shape[1] != self.TABPFN_EMBED_DIM:
+            raise RuntimeError(
+                f"TabPFN embedding dim mismatch: expected {self.TABPFN_EMBED_DIM}, "
+                f"got {embed_mean.shape[1]}.  Update TABPFN_EMBED_DIM class const."
+            )
+        for row in range(ts_mod.shape[0]):
+            h = int(hash(ts_mod[row].tobytes()))
+            self._probs_cache[h] = probs[row].astype(np.float32)
+            self._embed_cache[h] = embed_mean[row]
+            # also populate _sax_cache for noise-encoder fallback in inherited forward
+            self._sax_cache[h] = sax_feats[row]
+
+    def _embed_lookup(self, x_np: np.ndarray) -> np.ndarray:
+        rows = []
+        for i in range(x_np.shape[0]):
+            h = int(hash(x_np[i].tobytes()))
+            if h not in self._embed_cache:
+                raise KeyError(
+                    "TabPFNEmbeddingEncoder embed cache miss; call "
+                    "precompute_probs() first."
+                )
+            rows.append(self._embed_cache[h])
+        return np.stack(rows, axis=0).astype(np.float32)
+
+    def forward(self, x, **kwargs):
+        if isinstance(x, np.ndarray):
+            x_np = x
+        else:
+            x_np = x.detach().cpu().numpy()
+        if x_np.ndim != 3:
+            raise ValueError(f"expects (B, T, k_rois); got {x_np.shape}")
+        x_np = self._slice_to_modality(x_np)
+        # Try the embedding cache.  If miss (noise-encoder deepcopy path),
+        # fall back to live get_embeddings via the encoder's own _tabpfn.
+        try:
+            emb_np = self._embed_lookup(x_np)
+        except KeyError:
+            if self._tabpfn is None:
+                raise RuntimeError(
+                    "TabPFNEmbeddingEncoder.forward cache miss AND no fitted "
+                    "TabPFN — likely a noise_encoders deepcopy before fit. "
+                    "Caller must call fit_tabpfn first."
+                )
+            sax_feats = self._sax_encode_batch(x_np).astype(np.float32)
+            with torch.no_grad():
+                emb_raw = self._tabpfn.get_embeddings(sax_feats, data_source="test")
+                emb_np = (emb_raw.mean(axis=0) if emb_raw.ndim == 3 else emb_raw).astype(np.float32)
+        emb_t = torch.from_numpy(emb_np).to(
+            next(self.projector.parameters()).device
+        )
+        return self.projector(emb_t)
