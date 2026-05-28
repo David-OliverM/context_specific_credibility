@@ -24,7 +24,7 @@ encoders:
       sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
       mlp_n_layers: 2
       mlp_n_hidden: 128
@@ -38,7 +38,7 @@ encoders:
       sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
       mlp_n_layers: 2
       mlp_n_hidden: 128
@@ -52,7 +52,7 @@ encoders:
       sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
       mlp_n_layers: 2
       mlp_n_hidden: 64
@@ -66,7 +66,7 @@ encoders:
       sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
       mlp_n_layers: 2
       mlp_n_hidden: 64
@@ -80,7 +80,7 @@ encoders:
       sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
       mlp_n_layers: 2
       mlp_n_hidden: 128
@@ -94,7 +94,7 @@ encoders:
       sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
       mlp_n_layers: 2
       mlp_n_hidden: 64
@@ -108,7 +108,7 @@ encoders:
       sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
       mlp_n_layers: 2
       mlp_n_hidden: 128
@@ -122,7 +122,7 @@ encoders:
       sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
       mlp_n_layers: 2
       mlp_n_hidden: 128
@@ -136,7 +136,7 @@ encoders:
       sax_word_size: 32
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
 
       mlp_n_layers: 2
