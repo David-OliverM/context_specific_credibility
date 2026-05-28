@@ -426,21 +426,25 @@ class TabPFNEmbeddingEncoder(TabPFNSAXEncoder):
         if x_np.ndim != 3:
             raise ValueError(f"expects (B, T, k_rois); got {x_np.shape}")
         x_np = self._slice_to_modality(x_np)
-        # Try the embedding cache.  If miss (noise-encoder deepcopy path),
-        # fall back to live get_embeddings via the encoder's own _tabpfn.
+        # Try the embedding cache.  Fallbacks:
+        #   (a) Cache miss with fitted TabPFN → live get_embeddings (slow path).
+        #   (b) Cache miss without TabPFN     → zeros (noise_encoders deepcopy
+        #       path: FusionModel deepcopies self.encoders BEFORE fit_tabpfn,
+        #       so noise_encoders have neither cache nor _tabpfn. Returning
+        #       zeros makes the projector output a constant bias-term — the
+        #       same uninformative-but-non-crashing behavior the base class
+        #       achieves with its random-init projector on live SAX features).
         try:
             emb_np = self._embed_lookup(x_np)
         except KeyError:
+            B = x_np.shape[0]
             if self._tabpfn is None:
-                raise RuntimeError(
-                    "TabPFNEmbeddingEncoder.forward cache miss AND no fitted "
-                    "TabPFN — likely a noise_encoders deepcopy before fit. "
-                    "Caller must call fit_tabpfn first."
-                )
-            sax_feats = self._sax_encode_batch(x_np).astype(np.float32)
-            with torch.no_grad():
-                emb_raw = self._tabpfn.get_embeddings(sax_feats, data_source="test")
-                emb_np = (emb_raw.mean(axis=0) if emb_raw.ndim == 3 else emb_raw).astype(np.float32)
+                emb_np = np.zeros((B, self.TABPFN_EMBED_DIM), dtype=np.float32)
+            else:
+                sax_feats = self._sax_encode_batch(x_np).astype(np.float32)
+                with torch.no_grad():
+                    emb_raw = self._tabpfn.get_embeddings(sax_feats, data_source="test")
+                    emb_np = (emb_raw.mean(axis=0) if emb_raw.ndim == 3 else emb_raw).astype(np.float32)
         emb_t = torch.from_numpy(emb_np).to(
             next(self.projector.parameters()).device
         )
