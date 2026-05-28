@@ -24,7 +24,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
   SOMMOT:
     type: "TabPFNSAXEncoder"
@@ -35,7 +35,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
   DORSATTN:
     type: "TabPFNSAXEncoder"
@@ -46,7 +46,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
   VENTATTN:
     type: "TabPFNSAXEncoder"
@@ -57,7 +57,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
   LIMBIC:
     type: "TabPFNSAXEncoder"
@@ -68,7 +68,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
   CONT:
     type: "TabPFNSAXEncoder"
@@ -79,7 +79,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
   DEFAULT:
     type: "TabPFNSAXEncoder"
@@ -90,7 +90,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
   SUBCORTICAL:
     type: "TabPFNSAXEncoder"
@@ -101,7 +101,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
   CEREBELLAR:
     type: "TabPFNSAXEncoder"
@@ -112,7 +112,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
 
 predictors:

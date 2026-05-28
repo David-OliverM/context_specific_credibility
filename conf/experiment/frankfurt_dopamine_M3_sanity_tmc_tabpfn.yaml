@@ -24,7 +24,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
 
   ventral_striatum:
@@ -36,7 +36,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
 
   da_projection_cortex:
@@ -48,7 +48,7 @@ encoders:
       sax_word_size: 8
       sax_strategy: "quantile"
       n_classes: ${experiment.dataset.num_classes}
-      tabpfn_device: "cpu"
+      tabpfn_device: "cuda"
       random_state: 42
 
 predictors:
