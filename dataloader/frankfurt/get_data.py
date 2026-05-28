@@ -405,12 +405,35 @@ class FrankfurtFCDataset(Dataset):
 # Splitting (subject-wise GroupKFold)
 # ---------------------------------------------------------------------------
 
-def _subject_kfold(items: list[tuple[Path, str, int]], n_splits: int, fold: int):
+def _subject_kfold(
+    items: list[tuple[Path, str, int]],
+    n_splits: int,
+    fold: int,
+    subject_shuffle_seed: int | None = None,
+):
     """Return (train_items, val_items, test_items).
 
     Outer fold k of n_splits yields train + (val/test from the held-out fold
     subjects, 50/50).
+
+    Args:
+      subject_shuffle_seed: if given, the SUBJECT-level ordering is re-shuffled
+        using this seed BEFORE GroupKFold, producing different subject→fold
+        allocations per "repeat".  This is the key knob for multi-repeat CV
+        (F2.5a-MR).  If None (default), the historical deterministic split
+        is preserved (backwards compatible with all F1.x / F2.x results).
     """
+    if subject_shuffle_seed is not None:
+        # Reorder items so that unique-subjects appear in a seed-shuffled order
+        # before GroupKFold sees them.  Within a subject's scans, preserve
+        # the original filename order for determinism.
+        unique_subjects = np.unique(np.array([s for _, _, s in items]))
+        rng_subj = np.random.default_rng(int(subject_shuffle_seed))
+        shuffled = unique_subjects.copy()
+        rng_subj.shuffle(shuffled)
+        pos = {int(s): i for i, s in enumerate(shuffled)}
+        items = sorted(items, key=lambda it: (pos[int(it[2])], it[0].name))
+
     subjects = np.array([s for _, _, s in items])
     indices = np.arange(len(items))
     # GroupKFold deterministic ordering -> picks the fold-th split.
@@ -459,6 +482,7 @@ def get_dataloader(
     modality_grouping: str = "anatomical",
     n_splits: int = 5,
     fold: int = 0,
+    subject_shuffle_seed: int | None = None,
     emit_timeseries: bool = False,
     **kwargs,
 ):
@@ -500,8 +524,12 @@ def get_dataloader(
     print(f"[frankfurt] loaded {len(items)} CSVs from {data_path}")
     assert len(items) == 135, f"expected 135 scans, got {len(items)}"
 
-    train_items, val_items, test_items = _subject_kfold(items, n_splits, fold)
-    print(f"[frankfurt] split (fold {fold}/{n_splits}): "
+    train_items, val_items, test_items = _subject_kfold(
+        items, n_splits, fold, subject_shuffle_seed=subject_shuffle_seed,
+    )
+    shuffle_tag = (f"  subject_shuffle_seed={subject_shuffle_seed}"
+                   if subject_shuffle_seed is not None else "")
+    print(f"[frankfurt] split (fold {fold}/{n_splits}{shuffle_tag}): "
           f"train={len(train_items)}  val={len(val_items)}  test={len(test_items)}")
 
     train_set = FrankfurtFCDataset(
