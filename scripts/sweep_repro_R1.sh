@@ -62,6 +62,13 @@ for job in "${LANE_JOBS[@]}"; do
   IFS='|' read -r dataset experiment seed <<< "$job"
   echo "[R1.5] $(date -Iseconds) [$i/$N] START dataset=$dataset experiment=$experiment seed=$seed gpu=$GPU"
 
+  # ++experiment.dataset.args.fold=0 is a force-add for an F-branch-only
+  # config key. main.py logs `cfg.experiment.dataset.args.fold` inside a
+  # `hasattr(model, "fit_tabpfn_encoders")` branch — but LateFusionClassifier
+  # defines fit_tabpfn_encoders as a no-op for non-TabPFN models, so the
+  # branch always fires and the log access crashes on missing `fold`.
+  # Fold value is ignored by non-TabPFN encoders. Cleanest dispatcher-side
+  # unblock without modifying main.py on the repro branch.
   WANDB_MODE=disabled python main.py \
     dataset="$dataset" \
     experiment="$experiment" \
@@ -73,7 +80,8 @@ for job in "${LANE_JOBS[@]}"; do
     epochs="$EPOCHS" \
     group_tag="$RESULTS_TAG" \
     wandb=False \
-    data_dir="$DATA_DIR"
+    data_dir="$DATA_DIR" \
+    ++experiment.dataset.args.fold=0
 
   rc=$?
   if [ $rc -eq 0 ]; then
