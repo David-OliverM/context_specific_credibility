@@ -64,7 +64,7 @@ head:
     conditional_sum: True
     sum_cond_fn_type: 'Classifier'
     sum_cond_fn_args:
-      in_dim: 3072 #3072
+      in_dim: 6144
       n_layers: 3
       n_hidden: 64
       final_activation: None

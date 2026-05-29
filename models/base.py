@@ -298,7 +298,8 @@ class LateFusionClassifier(FusionModel):
 
         predictions = torch.cat(predictions, dim=1)
         unimodal_predictions = torch.permute(predictions, (1,0,2))
-        context = torch.cat(embeddings, dim=-1)
+        context = [torch.cat((t1, t2), dim=-1) for t1, t2 in zip(embeddings, corruptions)]
+        context = torch.cat(context, dim=-1)
         
 
         if(not self.cfg.joint_training or self.current_epoch <=5):
