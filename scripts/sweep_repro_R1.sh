@@ -71,7 +71,7 @@ for job in "${LANE_JOBS[@]}"; do
     test_noise=0.5 \
     joint_training=True \
     epochs="$EPOCHS" \
-    group_tag="$RESULTS_TAG" \
+    group_tag="${RESULTS_TAG}/seed_${seed}" \
     wandb=False \
     data_dir="$DATA_DIR"
 
