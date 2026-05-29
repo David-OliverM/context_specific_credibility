@@ -9,7 +9,10 @@ __pycache__/
 !conf/grouping/*.csv
 *.sh
 !docker/*.sh
-scripts/
+scripts/*
+!scripts/test.sh
+!scripts/train.sh
+!scripts/c2mf_smoke_test.sh
 data/
 results/
 calibration_plots/
