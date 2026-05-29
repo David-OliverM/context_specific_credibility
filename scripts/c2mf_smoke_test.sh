@@ -52,12 +52,15 @@ assert (len(a_train), len(a_val), len(a_test)) == (2400, 300, 300), \
     f"FSDD split sizes mismatch: got {(len(a_train), len(a_val), len(a_test))}"
 print(f"[smoke] FSDD ✓               (2400 / 300 / 300)")
 
-# 3. Core model imports (catches the predictor-before-fusion ordering bug fix
-#    in models/__init__.py + the simple_einet circular import).
-from packages.EinsumNet.simple_einet.einet import Einet                # noqa: F401
+# 3. Core model imports. Order matters: models.fusion FIRST so that the
+#    full models/__init__.py finishes (including .predictor on line 4)
+#    before einet.py is loaded standalone. Loading einet first triggers
+#    layers/einsum.py → models.predictor → models/__init__.py → .fusion
+#    → einet (mid-import) → circular. Recipe §3 has the wrong order.
 from models.fusion import CredibilityWeightedMean                      # noqa: F401
 from models.base import LateFusionClassifier                           # noqa: F401
-print(f"[smoke] core imports ✓       (Einet, CredibilityWeightedMean, LateFusionClassifier)")
+from packages.EinsumNet.simple_einet.einet import Einet                # noqa: F401
+print(f"[smoke] core imports ✓       (CredibilityWeightedMean, LateFusionClassifier, Einet)")
 
 # 4. AVMNIST dataloader — 1 batch via the public get_dataloader entrypoint
 #    that the experiment configs use. Mirrors the joint-training pattern.
