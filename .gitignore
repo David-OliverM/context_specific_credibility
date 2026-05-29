@@ -13,6 +13,7 @@ scripts/*
 !scripts/test.sh
 !scripts/train.sh
 !scripts/c2mf_smoke_test.sh
+!scripts/sweep_repro_R1.sh
 data/
 results/
 calibration_plots/
