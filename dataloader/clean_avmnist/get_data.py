@@ -38,7 +38,7 @@ def load_fsdd():
         lambda mfcc: Resize(size=(112,112), antialias=True)(mfcc.unsqueeze(0)).squeeze(),
     ])
     # Initialize a generator for a local version of FSDD
-    fsdd = TorchFSDDGenerator(version='local', path='/nas1-nfs1/home/pxt220000/projects/CS_Credibility/packages/torchfsdd/lib/test/data/v1.0.10', transforms=transforms, load_all=True)
+    fsdd = TorchFSDDGenerator(version='local', path='/data/csc_datasets/fsdd/recordings', transforms=transforms, load_all=True)
 
     # Create two Torch datasets for a train-test split from the generator
     train_set, val_set, test_set = fsdd.train_val_test_split(test_size=0.1, val_size=0.1)
