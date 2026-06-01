@@ -32,14 +32,39 @@ Reproducing script: `paper/scripts/verify_yeo7_mapping.py`. Vault documentation:
 
 | File | Status | Purpose |
 |---|---|---|
-| `dopamine_circuit_v2.csv` | **production** | Lorina Zapf's explicit cortico-striato-mesencephalic dopamine circuit definition (UKF, 2026-05-07). |
+| `dopamine_circuit_v3.csv` | **production** | Literature-grounded cortico-striato-mesencephalic reward/dopamine circuit (2026-06-01). Loaded by the dataloader. |
+| `dopamine_circuit_v2.csv` | superseded | Lorina Zapf's expert-sketch definition (UKF, 2026-05-07). Kept for provenance; v3 has identical membership. |
 
 The mapping has five nominal buckets (`dorsal_striatum`, `ventral_striatum`,
 `midbrain_proxy`, `da_projection_cortex`, `other`). Brain-Stem with k=1 falls
-through the k>=2 filter, reducing effective M to 4. Vault documentation:
+through the k>=2 filter, reducing effective M to 4 (and the paper pipeline drops
+`other` too, leaving M=3). Vault documentation:
 `vault/methods/Dopamine-Circuit Mapping for Frankfurt ROIs.md`. There is no
 v1 CSV in the repo because the pre-Lorina v1 mapping was a hard-coded regex
-inside `_dopamine_grouping`; v2 is the first persisted version.
+inside `_dopamine_grouping`; v2 was the first persisted version.
+
+**v3 (2026-06-01) is a provenance/citation upgrade, not a re-partition.** A
+literature audit confirmed every v2 assignment, so membership is byte-identical
+and the result tables are unchanged (re-run verified). The change is per-ROI
+citations in the CSV `confidence`/`note` columns:
+
+- `reward-core` (15 ROIs): ventral/dorsal striatum, vmPFC, OFC, ACC, amygdala -
+  canonical reward-circuit core nodes [Haber & Knutson 2010]. Notably OFC and
+  amygdala move from expert-interpretation to documented core nodes.
+- `mesocortical` (4 ROIs): dlPFC (SFG, MidFG) - dorsal-PFC mesocortical target
+  [Di Martino 2008 dorsal-caudate<->dlPFC; Cole 2013b].
+- `da-source-k1-dropped` (1 ROI): Brain-Stem - VTA/SN proxy [Haber & Knutson
+  2010 midbrain DA neurons]; HO has no dedicated midbrain mask; k=1 dropped.
+  A dedicated VTA/SN ROI would require the Pauli 2018 atlas (out of scope).
+- `excluded-atlas` (4 ROIs): globus pallidus + thalamus - reward-relevant
+  subregions (ventral pallidum, mediodorsal thalamus) exist [Haber & Knutson
+  2010] but HO resolves only the whole structure, so these stay in `other`.
+- `na` (108 ROIs): not part of the circuit.
+
+Citations: Haber & Knutson 2010 (Neuropsychopharmacology 35(1):4-26);
+Di Martino 2008 (Cerebral Cortex 18(12):2735-2747, doi:10.1093/cercor/bhn041);
+Cole 2013b (Cerebral Cortex 23(7):1509-1516); Grimm 2020 (Hum Brain Mapp
+41(7):1806-1818, the same-sample study).
 
 ### Doc
 

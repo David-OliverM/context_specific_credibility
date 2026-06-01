@@ -105,8 +105,9 @@ def _anatomical_grouping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
     return out
 
 
-# Bucket order for the dopamine-circuit grouping.  Lorina Zapf (UKF) defined
-# four primary buckets plus an `other` catch-all so no ROI is silently dropped.
+# Bucket order for the dopamine-circuit grouping.  Four primary buckets plus an
+# `other` catch-all so no ROI is silently dropped.  Membership is grounded in the
+# reward-circuit literature (v3); see conf/grouping/README.md.
 _DOPAMINE_BUCKET_ORDER = (
     "dorsal_striatum", "ventral_striatum", "midbrain_proxy",
     "da_projection_cortex", "other",
@@ -114,7 +115,7 @@ _DOPAMINE_BUCKET_ORDER = (
 
 _DOPAMINE_CSV_PATH = (
     Path(__file__).resolve().parent.parent.parent
-    / "conf" / "grouping" / "dopamine_circuit_v2.csv"
+    / "conf" / "grouping" / "dopamine_circuit_v3.csv"
 )
 
 
@@ -216,25 +217,36 @@ def _yeo7_mapping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
 
 
 def _dopamine_grouping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
-    """Dopamine-circuit grouping after Lorina Zapf (UKF, 2026-05-07).
+    """Dopamine-circuit grouping, literature-grounded (v3, 2026-06-01).
 
-    Loads code/conf/grouping/dopamine_circuit_v2.csv: a per-ROI assignment
+    Loads code/conf/grouping/dopamine_circuit_v3.csv: a per-ROI assignment
     of the 132 Frankfurt ROIs into five buckets representing the canonical
-    cortico-striato-mesencephalic dopamine circuit:
+    cortico-striato-mesencephalic reward/dopamine circuit:
 
-      - dorsal_striatum      : Caudate, Putamen (L+R) - primary D2/D3 sites
-      - ventral_striatum     : Accumbens (L+R)        - mesolimbic reward
-      - midbrain_proxy       : Brain-Stem (single ROI) - VTA/SN proxy; falls
-                               through the k>=2 filter and is dropped at
-                               training time, leaving M=4 effective
-      - da_projection_cortex : vmPFC, OFC, ACC, Amygdala, dlPFC components
-                               (13 cortical+subcortical ROIs)
-      - other                : every ROI not in Lorina's explicit circuit
-                               (112 ROIs); kept so no data is silently lost
+      - dorsal_striatum      : Caudate, Putamen (L+R) - nigrostriatal D2/D3
+                               target [Haber & Knutson 2010; Di Martino 2008]
+      - ventral_striatum     : Accumbens (L+R)        - mesolimbic reward core
+                               [Haber & Knutson 2010]
+      - midbrain_proxy       : Brain-Stem (single ROI) - VTA/SN dopamine source;
+                               HO has no dedicated midbrain mask, so this is a
+                               gross proxy with k=1 that falls through the k>=2
+                               filter and is dropped at training time (M=4
+                               effective).  A true VTA/SN ROI would need the
+                               Pauli 2018 subcortical atlas (out of scope).
+      - da_projection_cortex : vmPFC, OFC, ACC, Amygdala (reward-circuit core
+                               nodes [Haber & Knutson 2010]) + dlPFC (dorsal-PFC
+                               mesocortical target [Di Martino 2008; Cole 2013b])
+                               - 13 cortical+subcortical ROIs
+      - other                : every ROI outside the circuit (112 ROIs); kept so
+                               no data is silently lost.  Note: globus pallidus
+                               and thalamus sit here because HO resolves only the
+                               whole structure, not the reward-relevant ventral-
+                               pallidum / mediodorsal-thalamus subregions.
 
-    Provenance: thesis/correspondence/2026-05-07_zapf_data-questions.pdf
-    plus the v1 heuristic that preceded Lorina's reply (kept in the audit
-    trail at code/conf/grouping/README.md).
+    v3 keeps v2's membership IDENTICAL (a literature audit confirmed every
+    assignment); it upgrades the per-ROI provenance from expert-sketch (Lorina
+    Zapf 2026-05-07) to reward-circuit literature.  Per-ROI citations live in
+    the CSV `confidence`/`note` columns; full audit in conf/grouping/README.md.
     """
     return _grouping_from_csv(
         roi_labels, _DOPAMINE_CSV_PATH, _DOPAMINE_BUCKET_ORDER,
@@ -242,7 +254,7 @@ def _dopamine_grouping(roi_labels: Sequence[str]) -> dict[str, list[int]]:
         grouping_name="Dopamine-Circuit",
         log_message=(
             f"Dopamine-circuit mapping loaded from {_DOPAMINE_CSV_PATH.name} "
-            "(Lorina Zapf 2026-05-07; midbrain_proxy k=1 dropped). "
+            "(v3 literature-grounded; midbrain_proxy k=1 dropped). "
             "See code/conf/grouping/README.md for provenance."
         ),
     )

@@ -38,4 +38,44 @@ python credibility.py dataset=nyud2 experiment=nyud2_cs_credibility_weighted gro
 - [x] Credibility Weighted Mean
 - [x] Context-Specific Credibility Weighted Mean
 
+---
+
+## Fork notes (David-OliverM/context_specific_credibility)
+
+> This section is specific to our research fork and is not part of the upstream
+> README. `upstream` = `Pranuthi23/context_specific_credibility` (read-only);
+> `origin` = this fork. The fork adds a Frankfurt pharmacological-fMRI dataloader
+> and a real-clinical-data evaluation of C²MF.
+
+### Branch → purpose map
+
+**Convention:** the `f*/` (encoder/grouping experiments) and `repro*/` (Tenali
+reproduction) branches are kept SEPARATE from `main` and are never auto-merged;
+they are promoted into `main` only by hand, and only when an experiment produced
+a real improvement worth keeping.
+
+| Branch | Purpose |
+|---|---|
+| `main` | Integration branch. Frankfurt dataloader (`dataloader/frankfurt/`), modality groupings (`conf/grouping/`: Yeo-7 + dopamine v3), sanity configs. Kept aligned with upstream where practical. Stable infra (e.g. the literature-grounded dopamine v3 grouping) lands here. |
+| `f2.0/mlp-h-pipeline` | F2.0: `TabPFNSAXMLPEncoder` — MLP over FC features for the context embedding `h_i`; + Hydra configs. |
+| `f2.1/fc-for-tabpfn` | F2.1: `TabPFNFCEncoder` — TabPFN over within-modality FC features (the backbone we standardised on). |
+| `f2.2/sax-vocab-sweep` | F2.2: SAX vocabulary sweep; `TabPFN.fit(..., ignore_pretraining_limits=True)`. |
+| `f2.3/tabpfn-embedding` | F2.3: `TabPFNEmbeddingEncoder` (TabPFN embeddings as `h_i`). |
+| `f2.5/h-pi-stacking` | F2.5: stacking `h_i` (MLP+FC) onto the best `p_i` (SAX-w32 or FC). |
+| `f2.5a-mr/multi-repeat` | Live multi-repeat-CV Frankfurt branch: `subject_shuffle_seed` harness for honest CIs, groupings, configs. 7 commits ahead of `main`. |
+| `repro/avmnist-nyud-tenali2026` | R1 reproduction sweep of Tenali 2026 Table I (AVMNIST + NYUD), 5-seed, smoke test. |
+| `repro-clean/pranuthi-plus-bugfixes` | Minimal upstream + bugfixes — the honest **Path A** (no corruption oracle in the hyper-network context). |
+| `repro-clean-test/path-b-pranuthi` | Path A + the corruption-aware context concat — **Path B** (feeds the synthetic-corruption oracle); used to show the published C²MF gain depends on it. |
+| `main-pre-rebase-2026-05-11` | Historical snapshot of `main` before the 2026-05-11 rebase (Frankfurt dataloader skeleton). Kept for reference. |
+
+### Frankfurt modality groupings (`conf/grouping/`)
+
+- **Yeo-7** (`yeo7_frankfurt_v2_symmetric.csv`, M=9): functional-network grouping
+  via MNI overlay. Primary grouping.
+- **Dopamine circuit** (`dopamine_circuit_v3.csv`, M=3 effective in the paper
+  pipeline): literature-grounded reward-circuit grouping
+  [Haber & Knutson 2010; Di Martino 2008]. See `conf/grouping/README.md` for the
+  full per-bucket citation audit. `dopamine_circuit_v2.csv` (expert-sketch,
+  identical membership) is kept for provenance.
+
     
