@@ -311,7 +311,11 @@ class TabPFNSAXEncoder(torch.nn.Module):
             feats = self._hash_lookup(x_np, self._sax_cache)
         except KeyError:
             feats = self._sax_encode_batch(x_np).astype(np.float32)
+        proj_param = next(self.projector.parameters())
+        # Match the projector's device AND dtype: under Lightning double-precision
+        # (precision=64, used by the probabilistic-circuit head) the projector is
+        # float64 while SAX feats are float32 -> cast to avoid a dtype mismatch.
         feats_t = torch.from_numpy(feats).to(
-            next(self.projector.parameters()).device
+            device=proj_param.device, dtype=proj_param.dtype
         )
         return self.projector(feats_t)
