@@ -1,0 +1,81 @@
+# Temporal-C²MF (T3): SOURCES ARE TIME-PHASES of the dopamine circuit.
+# The 267 timesteps of the dopamine-20 signal are split into 6 contiguous phases;
+# a frozen TabPFN per phase predicts the drug; the CredibilityWeightedMean head
+# learns which time-phases to trust (the learned version of the hand-crafted
+# confidence-weighted aggregation that gave the paper-side lead 0.427).
+# See paper backlog T3 / §C2. Compare against lead 0.427 and FC baseline 0.396.
+name: "frankfurt/timephase6_credibility_weighted_tabpfn"
+classification: True
+multilabel: False
+dataset:
+  name: "frankfurt"
+  path: "${data_dir}/neuro_data_UKF"
+  args:
+    time_phases: 6          # sources = 6 contiguous time-phases (~44 timesteps each)
+    n_splits: 3
+    fold: 0
+    emit_timeseries: True   # per-phase output is the (phase_len, 20) ROI slice
+  modalities: 6
+  batch_size: ${batch_size}
+  num_classes: 3
+  class_names: ["Amisulpride", "LDopa", "Placebo"]
+
+# Each phase encoder gets the same 20-wide dopamine slice (local indices 0..19);
+# the time extent differs per phase (handled by the dataset).
+encoders:
+  phase_0: &tpfn_enc
+    type: "TabPFNSAXEncoder"
+    args:
+      roi_indices: [0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19]
+      embed_dim: 64
+      sax_alphabet: 4
+      sax_word_size: 8
+      sax_strategy: "quantile"
+      n_classes: ${experiment.dataset.num_classes}
+      tabpfn_device: "cpu"
+      random_state: 42
+  phase_1: *tpfn_enc
+  phase_2: *tpfn_enc
+  phase_3: *tpfn_enc
+  phase_4: *tpfn_enc
+  phase_5: *tpfn_enc
+
+predictors:
+  phase_0: &clf
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  phase_1: *clf
+  phase_2: *clf
+  phase_3: *clf
+  phase_4: *clf
+  phase_5: *clf
+
+head:
+  type: "CredibilityWeightedMean"
+  threshold_input: False
+  args:
+    num_features: ${experiment.dataset.modalities}
+    num_channels: 1
+    depth: 1
+    num_sums: 20
+    num_leaves: 20
+    num_repetitions: 20
+    num_classes: ${experiment.dataset.num_classes}
+    leaf_type: 'Dirichlet'
+    leaf_kwargs:
+      num_classes: ${experiment.dataset.num_classes}
+    einet_mixture: False
+    layer_type: 'einsum'
+    dropout: 0.2
+    conditional_sum: True
+    sum_cond_fn_type: 'Classifier'
+    sum_cond_fn_args:
+      in_dim: 384          # 6 phases * embed_dim 64
+      n_layers: 3
+      n_hidden: 64
+      final_activation: None
+      out_dim: None

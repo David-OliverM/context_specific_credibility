@@ -283,6 +283,21 @@ GROUPING_FNS = {
 }
 
 
+def _dopamine_roi_indices(roi_labels: Sequence[str]) -> list[int]:
+    """The dopamine-circuit ROI indices (union of all non-`other` buckets).
+
+    Equals the 20-ROI dopamine set used by the paper-side per-timestep lead
+    (dorsal_striatum + ventral_striatum + midbrain_proxy + da_projection_cortex).
+    Used by the temporal-C²MF (T3) path, where sources are TIME-phases, not ROI
+    groups, so the spatial extent is fixed to this circuit.
+    """
+    buckets = _dopamine_grouping(roi_labels)   # may already drop k<2 buckets
+    # re-read raw CSV so the k=1 midbrain_proxy ROI is not lost from the set
+    idx_to_bucket = _load_bucket_csv(_DOPAMINE_CSV_PATH, "dopamine_bucket")
+    idxs = sorted(i for i, b in idx_to_bucket.items() if b != "other")
+    return idxs
+
+
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
@@ -401,6 +416,54 @@ class FrankfurtFCDataset(Dataset):
         return batch_data, (idx, sample_corr, corr_modalities), noise_masks
 
 
+class FrankfurtTimePhaseDataset(Dataset):
+    """Temporal-C²MF (T3) dataset: SOURCES ARE TIME-PHASES, not ROI groups.
+
+    The dopamine-circuit ROI signal (fixed spatial extent) is split along TIME
+    into ``n_phases`` contiguous, roughly equal phases. Each phase is one
+    "modality": per item it returns the raw ROI time-series slice of that phase,
+    shape ``(phase_len, n_dopamine_rois)``. A frozen ``TabPFNSAXEncoder`` per
+    phase then predicts the drug from that phase, and the C²MF credibility head
+    learns which time-phases to trust (the learned version of the hand-crafted
+    confidence-weighted aggregation; see paper backlog T3 / §C2).
+
+    Same triple-of-tuples ``__getitem__`` shape as ``FrankfurtFCDataset`` so the
+    FusionModel / fit_tabpfn_encoders path stays agnostic.
+    """
+
+    def __init__(
+        self,
+        items: list[tuple[Path, str, int]],
+        dopamine_idxs: list[int],
+        n_phases: int,
+    ):
+        self.items = items
+        self.dopamine_idxs = list(dopamine_idxs)
+        self.n_phases = int(n_phases)
+        # contiguous, roughly-equal phase boundaries over the 267 timesteps
+        self.bounds = np.linspace(0, N_TIMESTEPS, self.n_phases + 1).astype(int)
+        self.cache: list[tuple[list[np.ndarray], int, int]] = []
+        for p, cond, subj in items:
+            ts = _load_timeseries(p)[:, self.dopamine_idxs]    # (267, n_dop)
+            per_mod = [
+                ts[self.bounds[k]:self.bounds[k + 1], :].astype(np.float32)
+                for k in range(self.n_phases)
+            ]                                                  # each (phase_len, n_dop)
+            self.cache.append((per_mod, LABEL_MAP[cond], subj))
+
+    def __len__(self) -> int:
+        return len(self.cache)
+
+    def __getitem__(self, idx: int):
+        per_mod, label, _subj = self.cache[idx]
+        feat_tensors = [torch.from_numpy(f).float() for f in per_mod]
+        noise_masks = tuple(torch.zeros_like(t) for t in feat_tensors)
+        batch_data = tuple(feat_tensors) + (torch.tensor(label, dtype=torch.long),)
+        sample_corr = ["none"] * len(feat_tensors)
+        corr_modalities = torch.zeros(len(feat_tensors), dtype=torch.bool)
+        return batch_data, (idx, sample_corr, corr_modalities), noise_masks
+
+
 # ---------------------------------------------------------------------------
 # Splitting (subject-wise GroupKFold)
 # ---------------------------------------------------------------------------
@@ -460,6 +523,7 @@ def get_dataloader(
     n_splits: int = 5,
     fold: int = 0,
     emit_timeseries: bool = False,
+    time_phases: int = 0,
     **kwargs,
 ):
     """Return (train_loader, val_loader, test_loader) for Frankfurt fMRI.
@@ -478,6 +542,23 @@ def get_dataloader(
     if not data_path.exists():
         raise FileNotFoundError(f"Frankfurt data_dir does not exist: {data_path}")
     roi_labels = _parse_roi_labels(data_path / "ROI_labels.txt")
+
+    # --- Temporal-C²MF (T3): sources are TIME-phases of the dopamine circuit ---
+    if time_phases and time_phases > 0:
+        dopamine_idxs = _dopamine_roi_indices(roi_labels)
+        print(f"[frankfurt] TIME-PHASE mode: n_phases={time_phases}  "
+              f"dopamine_rois={len(dopamine_idxs)}  (sources = time-phases)")
+        items = _enumerate_csvs(data_path)
+        assert len(items) == 135, f"expected 135 scans, got {len(items)}"
+        train_items, val_items, test_items = _subject_kfold(items, n_splits, fold)
+        print(f"[frankfurt] split (fold {fold}/{n_splits}): "
+              f"train={len(train_items)} val={len(val_items)} test={len(test_items)}")
+        mk = lambda it: FrankfurtTimePhaseDataset(it, dopamine_idxs, time_phases)
+        train_set, val_set, test_set = mk(train_items), mk(val_items), mk(test_items)
+        train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+        val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        test_loader = DataLoader(test_set, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+        return train_loader, val_loader, test_loader
 
     if modality_grouping not in GROUPING_FNS:
         raise ValueError(
