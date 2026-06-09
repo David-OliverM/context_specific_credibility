@@ -1,0 +1,151 @@
+# No-credibility baseline: same MLP encoders, plain mean fusion over the 8 Yeo
+# networks. This is the bar the learned C²MF credibility must beat (~0.739 AUROC).
+name: "abide/yeo7_weighted_mean_mlpenc"
+classification: True
+multilabel: False
+dataset:
+  name: "abide"
+  path: "/tmp/abide"
+  args:
+    modality_grouping: "yeo7"
+    source_mode: "rowblock"
+    cv: "subject"
+    n_splits: 5
+    fold: 0
+    seed: 1000
+  modalities: 8
+  batch_size: ${batch_size}
+  num_classes: 2
+  class_names: ["TC", "ASD"]
+
+encoders:
+  CONT:
+    type: "MLPEncoder"
+    args:
+      in_dim: 888
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+  DEFAULT:
+    type: "MLPEncoder"
+    args:
+      in_dim: 1998
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+  DORSATTN:
+    type: "MLPEncoder"
+    args:
+      in_dim: 888
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+  LIMBIC:
+    type: "MLPEncoder"
+    args:
+      in_dim: 2109
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+  SOMMOT:
+    type: "MLPEncoder"
+    args:
+      in_dim: 1998
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+  SUBCORTICAL:
+    type: "MLPEncoder"
+    args:
+      in_dim: 1554
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+  VENTATTN:
+    type: "MLPEncoder"
+    args:
+      in_dim: 888
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+  VIS:
+    type: "MLPEncoder"
+    args:
+      in_dim: 1998
+      embed_dim: 64
+      n_layers: 2
+      n_hidden: 128
+      dropout: 0.5
+
+predictors:
+  CONT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  DEFAULT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  DORSATTN:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  LIMBIC:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  SOMMOT:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  SUBCORTICAL:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  VENTATTN:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+  VIS:
+    type: "Classifier"
+    args:
+      in_dim: 64
+      out_dim: ${experiment.dataset.num_classes}
+      n_layers: 1
+      n_hidden: 64
+
+head:
+  type: "WeightedMean"
+  threshold_input: False
+  args:
+    weight_dims: [1, 8, 1]
+    normalize_dim: 1
+    multilabel: False
