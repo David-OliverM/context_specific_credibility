@@ -218,7 +218,14 @@ class TabPFNSAXEncoder(torch.nn.Module):
         return np.concatenate(feats_per_roi, axis=1)
 
     def _slice_to_modality(self, ts: np.ndarray) -> np.ndarray:
-        """Return ts as (n, T, k_rois). Accepts pre-sliced or full-132 atlas."""
+        """Return ts as (n, T, k_rois). Accepts pre-sliced or full-132 atlas.
+
+        Canonicalise to float32 so the content-hash cache keys match regardless
+        of the incoming dtype: under Lightning precision=64 the batch arrives as
+        float64, whose .tobytes() differs from the float32 precompute cache and
+        would otherwise cause a spurious 'cache miss'.
+        """
+        ts = np.asarray(ts, dtype=np.float32)
         if ts.shape[-1] == len(self.roi_indices):
             return ts
         if ts.shape[-1] >= max(self.roi_indices) + 1:
