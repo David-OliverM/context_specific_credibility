@@ -3,6 +3,7 @@ from packages.MultiBench.datasets.imdb.get_data import get_dataloader as mmimdb_
 from dataloader.nyud2.get_data import get_dataloader as nyud2_data_loader
 from dataloader.clean_avmnist.get_data import get_dataloader as clean_avmnist_data_loader
 from dataloader.frankfurt.get_data import get_dataloader as frankfurt_data_loader
+from dataloader.abide.get_data import get_dataloader as abide_data_loader
 
 
 DATASET_DICT = {
@@ -10,6 +11,7 @@ DATASET_DICT = {
     "nyud2": nyud2_data_loader,
     "clean_avmnist": clean_avmnist_data_loader,
     "frankfurt": frankfurt_data_loader,
+    "abide": abide_data_loader,
 }
 
 def get_dataloader(cfg):

@@ -218,7 +218,14 @@ class TabPFNSAXEncoder(torch.nn.Module):
         return np.concatenate(feats_per_roi, axis=1)
 
     def _slice_to_modality(self, ts: np.ndarray) -> np.ndarray:
-        """Return ts as (n, T, k_rois). Accepts pre-sliced or full-132 atlas."""
+        """Return ts as (n, T, k_rois). Accepts pre-sliced or full-132 atlas.
+
+        Canonicalise to float32 so the content-hash cache keys match regardless
+        of the incoming dtype: under Lightning precision=64 the batch arrives as
+        float64, whose .tobytes() differs from the float32 precompute cache and
+        would otherwise cause a spurious 'cache miss'.
+        """
+        ts = np.asarray(ts, dtype=np.float32)
         if ts.shape[-1] == len(self.roi_indices):
             return ts
         if ts.shape[-1] >= max(self.roi_indices) + 1:
@@ -229,7 +236,15 @@ class TabPFNSAXEncoder(torch.nn.Module):
         )
 
     def fit_tabpfn(self, X_train_full_ts: np.ndarray, y_train: np.ndarray) -> None:
-        """Fit in-context TabPFN on the modality's SAX features."""
+        """Fit in-context TabPFN on the modality's SAX features.
+
+        ``ignore_pretraining_limits=True`` required for F2.2 Stage 2 yeo7
+        cells where SAX with word_size=32 produces feature counts > 500
+        (e.g. CEREBELLAR k=26 × 32 = 832; VIS k=18 × 32 = 576).  TabPFN's
+        official upper limit is 500 — Hollmann2025 §Limitations note that
+        the model still works above the limit but with potentially degraded
+        quality. Quality is judged from results, not refused upfront.
+        """
         if X_train_full_ts.ndim != 3:
             raise ValueError(
                 f"X_train_full_ts must be (n, T, n_rois); got {X_train_full_ts.shape}"
@@ -237,7 +252,9 @@ class TabPFNSAXEncoder(torch.nn.Module):
         ts_mod = self._slice_to_modality(X_train_full_ts)
         feats = self._sax_encode_batch(ts_mod).astype(np.float32)
         self._tabpfn = TabPFNClassifier(
-            device=self.tabpfn_device, random_state=self.random_state
+            device=self.tabpfn_device,
+            random_state=self.random_state,
+            ignore_pretraining_limits=True,
         )
         self._tabpfn.fit(feats, np.asarray(y_train).astype(np.int64))
         self._probs_cache = {}
@@ -311,7 +328,100 @@ class TabPFNSAXEncoder(torch.nn.Module):
             feats = self._hash_lookup(x_np, self._sax_cache)
         except KeyError:
             feats = self._sax_encode_batch(x_np).astype(np.float32)
+        proj_param = next(self.projector.parameters())
+        # Match the projector's device AND dtype: under Lightning double-precision
+        # (precision=64, used by the probabilistic-circuit head) the projector is
+        # float64 while SAX feats are float32 -> cast to avoid a dtype mismatch.
         feats_t = torch.from_numpy(feats).to(
-            next(self.projector.parameters()).device
+            device=proj_param.device, dtype=proj_param.dtype
         )
         return self.projector(feats_t)
+
+
+# ---------------------------------------------------------------------------
+# F2.1: TabPFN(FC) for p_i, Linear(SAX) for h_i unchanged.
+# ---------------------------------------------------------------------------
+#
+# Single-knob test (vs Sanity-Sweep TabPFN baseline): switch ONLY TabPFN's
+# input from SAX-tokens to FC-features (Pearson upper-triangle).  Orthogonal
+# to F2.0 (which changed h_i).  Motivated by F2.0 outcome: h_i is NOT the
+# bottleneck on dopM3, so the prime suspect is p_i, i.e. TabPFN's input format.
+#
+class TabPFNFCEncoder(TabPFNSAXEncoder):
+    """TabPFN over FC features for p_i. h_i pipeline (Linear(SAX)) inherited."""
+
+    def __init__(
+        self,
+        roi_indices,
+        embed_dim: int = 64,
+        sax_alphabet: int = 4,
+        sax_word_size: int = 8,
+        sax_strategy: str = "quantile",
+        n_classes: int = 3,
+        tabpfn_device: str = "cpu",
+        freeze_params: bool = False,
+        random_state: int = 42,
+        **_ignored,
+    ):
+        super().__init__(
+            roi_indices=roi_indices,
+            embed_dim=embed_dim,
+            sax_alphabet=sax_alphabet,
+            sax_word_size=sax_word_size,
+            sax_strategy=sax_strategy,
+            n_classes=n_classes,
+            tabpfn_device=tabpfn_device,
+            freeze_params=freeze_params,
+            random_state=random_state,
+        )
+        k = len(self.roi_indices)
+        if k < 2:
+            raise ValueError(f"TabPFNFCEncoder needs k>=2 ROIs for FC; got {k}")
+        self.fc_dim = k * (k - 1) // 2
+
+    def _compute_fc(self, ts_batch_np: np.ndarray) -> np.ndarray:
+        """(B, T, k_rois) -> (B, k*(k-1)/2) Pearson upper-triangle float32."""
+        B, _, k = ts_batch_np.shape
+        if k != len(self.roi_indices):
+            raise ValueError(
+                f"k_rois mismatch: expected {len(self.roi_indices)}, got {k}"
+            )
+        triu_i, triu_j = np.triu_indices(k, k=1)
+        out = np.empty((B, triu_i.size), dtype=np.float32)
+        for b in range(B):
+            with np.errstate(invalid='ignore', divide='ignore'):
+                corr = np.corrcoef(ts_batch_np[b].T)
+            corr = np.nan_to_num(corr, nan=0.0, posinf=0.0, neginf=0.0)
+            out[b] = corr[triu_i, triu_j].astype(np.float32)
+        return out
+
+    def fit_tabpfn(self, X_train_full_ts: np.ndarray, y_train: np.ndarray) -> None:
+        """Override: fit TabPFN's in-context demos on FC features (not SAX)."""
+        if X_train_full_ts.ndim != 3:
+            raise ValueError(
+                f"X_train_full_ts must be (n, T, n_rois); got {X_train_full_ts.shape}"
+            )
+        ts_mod = self._slice_to_modality(X_train_full_ts)
+        feats = self._compute_fc(ts_mod).astype(np.float32)
+        self._tabpfn = TabPFNClassifier(
+            device=self.tabpfn_device, random_state=self.random_state
+        )
+        self._tabpfn.fit(feats, np.asarray(y_train).astype(np.int64))
+        self._probs_cache = {}
+        self._sax_cache = {}
+
+    def precompute_probs(self, X_all_full_ts: np.ndarray, sample_indices=None) -> None:
+        """Override: predict_proba on FC; also populate SAX cache for h_i path."""
+        del sample_indices
+        if self._tabpfn is None:
+            raise RuntimeError("precompute_probs requires fit_tabpfn first.")
+        ts_mod = self._slice_to_modality(X_all_full_ts)
+        fc_feats = self._compute_fc(ts_mod).astype(np.float32)
+        with torch.no_grad():
+            probs = self._tabpfn.predict_proba(fc_feats)
+        # h_i forward path stays SAX-based — populate sax cache here too.
+        sax_feats = self._sax_encode_batch(ts_mod).astype(np.float32)
+        for row in range(ts_mod.shape[0]):
+            h = int(hash(ts_mod[row].tobytes()))
+            self._probs_cache[h] = probs[row].astype(np.float32)
+            self._sax_cache[h] = sax_feats[row]
