@@ -173,11 +173,13 @@ def main(cfg: DictConfig):
     if not cfg.load_and_eval:
         # TabPFNSAXEncoder needs a one-time fit per fold before training.
         # No-op when no TabPFNSAXEncoder is present in self.encoders.
+        # OmegaConf.select(default=...) handles the upstream avmnist/nyud2
+        # configs that don't carry an experiment.dataset.args.fold key.
         if hasattr(model, "fit_tabpfn_encoders"):
-            logger.info(
-                "Fitting TabPFN-SAX encoders for fold "
-                f"{cfg.experiment.dataset.args.fold}..."
+            fold = omegaconf.OmegaConf.select(
+                cfg, "experiment.dataset.args.fold", default="N/A"
             )
+            logger.info(f"Fitting TabPFN-SAX encoders for fold {fold}...")
             model.fit_tabpfn_encoders(train_loader, val_loader, test_loader)
 
         # Fit model — resume from cfg.resume_ckpt if set (optional config key)
