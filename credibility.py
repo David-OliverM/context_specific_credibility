@@ -239,7 +239,10 @@ class CSLateFusionClassifier(LateFusionClassifier):
         batch_credibility = credibility.mean(dim=0).detach().cpu()
         for i in range(self.cfg.experiment.dataset.modalities):     
             self.log(f"{mode}Credibility-Modality-{i}",batch_credibility[i])
-        probs, targets = predictions_out.detach().cpu(), targets.detach().cpu()
+        # keep probs/targets on the model device so they match the torchmetrics
+        # objects (which Lightning moves onto the accelerator); forcing .cpu() here
+        # caused a cuda-vs-cpu device mismatch in metric computation.
+        probs, targets = predictions_out.detach(), targets.detach()
         for metric_name in self.metrics:
             self.log(f"{mode}{metric_name}",self.metrics[metric_name](probs, targets),**kwargs)
         
